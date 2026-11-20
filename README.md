@@ -51,14 +51,6 @@ existing `altoclef-4.0-SNAPSHOT.jar` with the one found in `Artifacts.zip`
 [Check releases](https://github.com/gaucho-matrero/altoclef/releases). Note you will need to copy over both jar files
 for the mod to work.
 
-### Meloweh's Extra Features Release (Unofficial)
-
-Has some schematic support, command macros and a few utility features. Will eventually be merged, but if you can try it
-out now if you'd like:
-
-- [AltoClef jar](https://github.com/Meloweh/altoclef/releases)
-- [Baritone jar](https://github.com/Meloweh/baritone/releases)
-
 ### Versions
 
 This is a **fabric only** mod, currently available for **Minecraft 26.3** (requires Java 25).
