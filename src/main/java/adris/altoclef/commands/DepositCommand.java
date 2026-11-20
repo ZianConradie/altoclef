@@ -6,10 +6,10 @@ import adris.altoclef.tasks.container.StoreInAnyContainerTask;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.slots.PlayerSlot;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.ToolItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import org.apache.commons.lang3.ArrayUtils;
+import net.minecraft.core.component.DataComponents;
 
 public class DepositCommand extends Command {
     public DepositCommand() throws CommandException {
@@ -25,7 +25,7 @@ public class DepositCommand extends Command {
             // Ignore tools
             if (!stack.isEmpty()) {
                 Item item = stack.getItem();
-                return !(item instanceof ToolItem);
+                return !item.components().has(DataComponents.TOOL);
             }
             return false;
         });

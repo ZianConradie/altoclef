@@ -5,9 +5,9 @@ import adris.altoclef.chains.MobDefenseChain;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.baritone.GoalRunAwayFromEntities;
 import baritone.api.pathing.goals.Goal;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.CreeperEntity;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.Optional;
 
@@ -23,7 +23,7 @@ public class RunAwayFromCreepersTask extends CustomBaritoneGoalTask {
     @Override
     protected boolean isEqual(Task other) {
         if (other instanceof RunAwayFromCreepersTask task) {
-            //if (task._mob.getPos().squaredDistanceTo(_mob.getPos()) > 0.5) return false;
+            //if (task._mob.position().squaredDistanceTo(_mob.position()) > 0.5) return false;
             if (Math.abs(task._distanceToRun - _distanceToRun) > 1) return false;
             return true;
         }
@@ -50,13 +50,13 @@ public class RunAwayFromCreepersTask extends CustomBaritoneGoalTask {
 
         @Override
         protected Optional<Entity> getEntities(AltoClef mod) {
-            return mod.getEntityTracker().getClosestEntity(CreeperEntity.class);
+            return mod.getEntityTracker().getClosestEntity(Creeper.class);
         }
 
         @Override
         protected double getCostOfEntity(Entity entity, int x, int y, int z) {
-            if (entity instanceof CreeperEntity) {
-                return MobDefenseChain.getCreeperSafety(new Vec3d(x + 0.5, y + 0.5, z + 0.5), (CreeperEntity) entity);
+            if (entity instanceof Creeper) {
+                return MobDefenseChain.getCreeperSafety(new Vec3(x + 0.5, y + 0.5, z + 0.5), (Creeper) entity);
             }
             return super.getCostOfEntity(entity, x, y, z);
         }

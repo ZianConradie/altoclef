@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "altoclef",
-  "version": "1.21-beta1",
+  "version": "${version}",
   "name": "Alto Clef",
   "description": "Plays Block Game",
   "authors": [
@@ -23,5 +23,15 @@
   },
   "mixins": [
     "altoclef.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.20.1",
+    "minecraft": "~26.3",
+    "java": ">=25"
+  },
+  "jars": [
+    {
+      "file": "META-INF/jars/baritone-marvion-26.3.jar"
+    }
   ]
 }

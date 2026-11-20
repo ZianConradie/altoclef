@@ -1,22 +1,28 @@
 package adris.altoclef.util.helpers;
 
 import adris.altoclef.AltoClef;
-import net.minecraft.enchantment.EnchantmentHelper;
-import net.minecraft.entity.DamageUtil;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.Tameable;
-import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageTypes;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.entity.mob.*;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.entity.raid.RaiderEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.tag.DamageTypeTags;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.damagesource.CombatRules;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.monster.Blaze;
+import net.minecraft.world.entity.monster.Enderman;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.piglin.Piglin;
+import net.minecraft.world.entity.monster.cubemob.Slime;
+import net.minecraft.world.entity.monster.warden.Warden;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.raid.Raider;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.tags.DamageTypeTags;
 
 import java.util.Objects;
+import net.minecraft.world.entity.EquipmentSlot;
 
 /**
  * Helper functions to interpret entity state
@@ -29,24 +35,24 @@ public class EntityHelper {
     }
 
     public static boolean isGenerallyHostileToPlayer(AltoClef mod, Entity entity) {
-        if (entity instanceof Tameable tameable && tameable.getOwnerUuid() != null
-                && tameable.getOwnerUuid().equals(mod.getPlayer().getUuid())) return false;
-        if (entity instanceof SlimeEntity slime && mod.getPlayer().isInRange(slime, 3)) return true;
-        if (entity instanceof RaiderEntity raider && mod.getPlayer().isInRange(raider, 16)) return true;
-        if (entity instanceof WardenEntity warden && mod.getPlayer().isInRange(warden, 16)) return true;
-        if (entity instanceof EndermanEntity enderman && enderman.canSee(mod.getPlayer()) && enderman.isAttacking())
+        if (entity instanceof OwnableEntity tameable && tameable.getOwner() != null
+                && tameable.getOwner().equals(mod.getPlayer().getUUID())) return false;
+        if (entity instanceof Slime slime && mod.getPlayer().closerThan(slime, 3)) return true;
+        if (entity instanceof Raider mob && mod.getPlayer().closerThan(mob, 16)) return true;
+        if (entity instanceof Warden warden && mod.getPlayer().closerThan(warden, 16)) return true;
+        if (entity instanceof Enderman enderman && enderman.hasLineOfSight(mod.getPlayer()) && enderman.isAggressive())
             return true;
-        if (entity instanceof BlazeEntity blaze && mod.getPlayer().isInRange(blaze, 3)) return true;
-        if (entity instanceof SlimeEntity || entity instanceof RaiderEntity || entity instanceof WardenEntity
-                || entity instanceof EndermanEntity || entity instanceof BlazeEntity) return false;
-        if (entity instanceof MobEntity mob && !mob.isAttacking()) return false;
+        if (entity instanceof Blaze blaze && mod.getPlayer().closerThan(blaze, 3)) return true;
+        if (entity instanceof Slime || entity instanceof Raider || entity instanceof Warden
+                || entity instanceof Enderman || entity instanceof Blaze) return false;
+        if (entity instanceof Mob mob && !mob.isAggressive()) return false;
         return !isTradingPiglin(entity);
     }
 
     public static boolean isTradingPiglin(Entity entity) {
-        if (entity instanceof PiglinEntity pig) {
-            if (pig.getHandItems() != null) {
-                for (ItemStack stack : pig.getHandItems()) {
+        if (entity instanceof Piglin pig) {
+            {
+                for (ItemStack stack : new ItemStack[]{pig.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND), pig.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND)}) {
                     if (stack.getItem().equals(Items.GOLD_INGOT)) {
                         // We're trading with this one, ignore it.
                         return true;
@@ -61,23 +67,23 @@ public class EntityHelper {
      * Calculate the resulting damage dealt to a player as a result of some damage.
      * If this player were to receive this damage, the player's health will be subtracted by the resulting value.
      */
-    public static double calculateResultingPlayerDamage(PlayerEntity player, DamageSource source, double damageAmount) {
+    public static double calculateResultingPlayerDamage(Player player, DamageSource source, double damageAmount) {
         // Copied logic from `PlayerEntity.applyDamage`
 
-        if (player.isInvulnerableTo(source))
+        if (player.isInvulnerable())
             return 0;
 
         // Armor Base
-        if (!source.isIn(DamageTypeTags.BYPASSES_ARMOR)) {
-            damageAmount = DamageUtil.getDamageLeft(player, (float) damageAmount, source, (float) player.getArmor(), (float) player.getAttributeValue(EntityAttributes.GENERIC_ARMOR_TOUGHNESS));
+        if (!source.is(DamageTypeTags.BYPASSES_ARMOR)) {
+            damageAmount = CombatRules.getDamageAfterAbsorb(player, (float) damageAmount, source, (float) player.getArmorValue(), (float) player.getAttributeValue(Attributes.ARMOR_TOUGHNESS));
         }
 
         // Enchantments & Potions
-        if (!source.isIn(DamageTypeTags.BYPASSES_SHIELD)) {
+        if (!source.is(DamageTypeTags.BYPASSES_SHIELD)) {
             float k;
-            if (player.hasStatusEffect(StatusEffects.RESISTANCE) && source.isOf(DamageTypes.OUT_OF_WORLD)) {
+            if (player.hasEffect(MobEffects.RESISTANCE) && source.is(DamageTypes.FELL_OUT_OF_WORLD)) {
                 //noinspection ConstantConditions
-                k = (player.getStatusEffect(StatusEffects.RESISTANCE).getAmplifier() + 1) * 5;
+                k = (player.getEffect(MobEffects.RESISTANCE).getAmplifier() + 1) * 5;
                 float j = 25 - k;
                 double f = damageAmount * (double) j;
                 double g = damageAmount;
@@ -87,9 +93,9 @@ public class EntityHelper {
             if (damageAmount <= 0.0) {
                 damageAmount = 0.0;
             } else {
-                k = EnchantmentHelper.getProtectionAmount(Objects.requireNonNull(player.getServer()).getWorld(player.getWorld().getRegistryKey()), player, source);
+                k = EnchantmentHelper.getDamageProtection(player.level() instanceof net.minecraft.server.level.ServerLevel sl ? sl : null, player, source);
                 if (k > 0) {
-                    damageAmount = DamageUtil.getInflictedDamage((float) damageAmount, k);
+                    damageAmount = CombatRules.getDamageAfterMagicAbsorb((float) damageAmount, k);
                 }
             }
         }

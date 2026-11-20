@@ -2,31 +2,32 @@ package adris.altoclef.mixins;
 
 import adris.altoclef.eventbus.EventBus;
 import adris.altoclef.eventbus.events.BlockPlaceEvent;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(World.class)
+@Mixin(Level.class)
 public class WorldBlockModifiedMixin {
 
     private static boolean hasBlock(BlockState state, BlockPos pos) {
-        return !state.isAir() && state.isSolidBlock(MinecraftClient.getInstance().world, pos);
+        return !state.isAir() && state.isRedstoneConductor(Minecraft.getInstance().level, pos);
     }
 
     @Inject(
-            method = "onBlockChanged",
+            method = "setBlock",
             at = @At("HEAD")
     )
-    public void onBlockWasChanged(BlockPos pos, BlockState oldBlock, BlockState newBlock, CallbackInfo ci) {
+    public void onBlockWasChanged(BlockPos pos, BlockState newBlock, int flags, int recursionLeft, CallbackInfoReturnable<Boolean> ci) {
+        Level self = (Level) (Object) this;
+        BlockState oldBlock = self.getBlockState(pos);
         if (!hasBlock(oldBlock, pos) && hasBlock(newBlock, pos)) {
             BlockPlaceEvent evt = new BlockPlaceEvent(pos, newBlock);
             EventBus.publish(evt);
         }
     }
-    //onBlockChanged
 }

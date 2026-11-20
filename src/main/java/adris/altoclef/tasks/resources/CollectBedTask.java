@@ -10,9 +10,9 @@ import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.MiningRequirement;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.WorldHelper;
-import net.minecraft.block.Block;
-import net.minecraft.item.Item;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.item.Item;
+import net.minecraft.core.BlockPos;
 
 import java.util.Optional;
 
@@ -66,7 +66,7 @@ public class CollectBedTask extends CraftWithMatchingWoolTask {
         Optional<BlockPos> nearestBed = mod.getBlockTracker().getNearestTracking(BEDS);
         if (nearestBed.isPresent() && WorldHelper.canBreak(mod, nearestBed.get())) {
             for (Block CopperBlock : copperBlocks) {
-                Block blockBelow = mod.getWorld().getBlockState(nearestBed.get().down()).getBlock();
+                Block blockBelow = mod.getWorld().getBlockState(nearestBed.get().below()).getBlock();
                 if (blockBelow == CopperBlock) {
                     Debug.logMessage("Blacklisting bed in trial chambers.");
                     mod.getBlockTracker().requestBlockUnreachable(nearestBed.get(), 0);

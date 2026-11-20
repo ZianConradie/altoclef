@@ -1,4 +1,5 @@
 package adris.altoclef.tasks.construction;
+import adris.altoclef.util.baritone.BaritoneCompat;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
@@ -16,21 +17,21 @@ import adris.altoclef.util.slots.Slot;
 import adris.altoclef.util.time.TimerGame;
 import baritone.api.utils.IPlayerContext;
 import baritone.api.utils.input.Input;
-import baritone.pathing.movement.MovementHelper;
-import net.minecraft.block.Block;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.hit.HitResult;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.BlockPos;
 import org.apache.commons.lang3.ArrayUtils;
 
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.function.Predicate;
+import net.minecraft.world.item.component.SwingAnimation;
 
 /**
  * Place a type of block nearby, anywhere.
@@ -92,20 +93,20 @@ public class PlaceBlockNearbyTask extends Task {
         if (!cursorStack.isEmpty()) {
             Optional<Slot> moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
             if (moveTo.isPresent()) {
-                mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlot(moveTo.get(), 0, ContainerInput.PICKUP);
                 return null;
             }
             if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
                 return null;
             }
             Optional<Slot> garbage = StorageHelper.getGarbageSlot(mod);
             // Try throwing away cursor slot if it's garbage
             if (garbage.isPresent()) {
-                mod.getSlotHandler().clickSlot(garbage.get(), 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlot(garbage.get(), 0, ContainerInput.PICKUP);
                 return null;
             }
-            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
         } else {
             StorageHelper.closeScreen();
         }
@@ -187,13 +188,13 @@ public class PlaceBlockNearbyTask extends Task {
     }
 
     private BlockPos getCurrentlyLookingBlockPlace(AltoClef mod) {
-        HitResult hit = MinecraftClient.getInstance().crosshairTarget;
+        HitResult hit = Minecraft.getInstance().hitResult;
         if (hit instanceof BlockHitResult bhit) {
             BlockPos bpos = bhit.getBlockPos();//.subtract(bhit.getSide().getVector());
             //Debug.logMessage("TEMP: A: " + bpos);
             IPlayerContext ctx = mod.getClientBaritone().getPlayerContext();
-            if (MovementHelper.canPlaceAgainst(ctx, bpos)) {
-                BlockPos placePos = bhit.getBlockPos().add(bhit.getSide().getVector());
+            if (BaritoneCompat.canPlaceAgainst(ctx, bpos)) {
+                BlockPos placePos = bhit.getBlockPos().offset(bhit.getDirection().getStep());
                 // Don't place inside the player.
                 if (WorldHelper.isInsidePlayer(mod, placePos)) {
                     return null;
@@ -219,15 +220,15 @@ public class PlaceBlockNearbyTask extends Task {
             //mod.getInputControls().tryPress(Input.CLICK_RIGHT);
             // This appears to work on servers...
             // TODO: Helper lol
-            HitResult mouseOver = MinecraftClient.getInstance().crosshairTarget;
+            HitResult mouseOver = Minecraft.getInstance().hitResult;
             if (mouseOver == null || mouseOver.getType() != HitResult.Type.BLOCK) {
                 return false;
             }
-            Hand hand = Hand.MAIN_HAND;
-            assert MinecraftClient.getInstance().interactionManager != null;
-            if (MinecraftClient.getInstance().interactionManager.interactBlock(mod.getPlayer(), hand, (BlockHitResult) mouseOver) == ActionResult.SUCCESS &&
-                    mod.getPlayer().isSneaking()) {
-                mod.getPlayer().swingHand(hand);
+            InteractionHand hand = InteractionHand.MAIN_HAND;
+            assert Minecraft.getInstance().gameMode != null;
+            if (Minecraft.getInstance().gameMode.useItemOn(mod.getPlayer(), hand, (BlockHitResult) mouseOver) == InteractionResult.SUCCESS &&
+                    mod.getPlayer().isCrouching()) {
+                mod.getPlayer().swing(hand, SwingAnimation.DEFAULT, false);
                 _justPlaced = targetPlace;
                 Debug.logMessage("PRESSED");
                 return true;
@@ -251,8 +252,8 @@ public class PlaceBlockNearbyTask extends Task {
         int range = 7;
         BlockPos best = null;
         double smallestScore = Double.POSITIVE_INFINITY;
-        BlockPos start = mod.getPlayer().getBlockPos().add(-range, -range, -range);
-        BlockPos end = mod.getPlayer().getBlockPos().add(range, range, range);
+        BlockPos start = mod.getPlayer().blockPosition().offset(-range, -range, -range);
+        BlockPos end = mod.getPlayer().blockPosition().offset(range, range, range);
         for (BlockPos blockPos : WorldHelper.scanRegion(mod, start, end)) {
             boolean solid = WorldHelper.isSolid(mod, blockPos);
             boolean inside = WorldHelper.isInsidePlayer(mod, blockPos);
@@ -268,8 +269,8 @@ public class PlaceBlockNearbyTask extends Task {
             if (!WorldHelper.canReach(mod, blockPos) || !WorldHelper.canPlace(mod, blockPos)) {
                 continue;
             }
-            boolean hasBelow = WorldHelper.isSolid(mod, blockPos.down());
-            double distSq = blockPos.getSquaredDistance(mod.getPlayer().getPos());
+            boolean hasBelow = WorldHelper.isSolid(mod, blockPos.below());
+            double distSq = blockPos.distSqr(mod.getPlayer().blockPosition());
 
             double score = distSq + (solid ? 4 : 0) + (hasBelow ? 0 : 10) + (inside ? 3 : 0);
 

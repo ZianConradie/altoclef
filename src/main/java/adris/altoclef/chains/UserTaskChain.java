@@ -19,8 +19,8 @@ public class UserTaskChain extends SingleTaskChain {
     private boolean _runningIdleTask;
     private boolean _nextTaskIdleFlag;
 
-    public UserTaskChain(TaskRunner runner) {
-        super(runner);
+    public UserTaskChain(TaskRunner task) {
+        super(task);
     }
 
     private static String prettyPrintTimeDuration(double seconds) {

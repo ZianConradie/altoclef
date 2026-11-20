@@ -14,21 +14,21 @@ import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.slots.SmokerSlot;
 import adris.altoclef.util.time.TimerGame;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.HostileEntity;
-import net.minecraft.entity.mob.SlimeEntity;
-import net.minecraft.entity.passive.ChickenEntity;
-import net.minecraft.entity.passive.CowEntity;
-import net.minecraft.entity.passive.PigEntity;
-import net.minecraft.entity.passive.SheepEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.SmokerScreenHandler;
+import net.minecraft.client.Minecraft;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.cubemob.Slime;
+import net.minecraft.world.entity.animal.chicken.Chicken;
+import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.animal.pig.Pig;
+import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.SmokerMenu;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -36,10 +36,10 @@ import java.util.function.Predicate;
 
 public class CollectMeatTask extends Task {
     private static final CookableFoodTarget[] COOKABLE_FOODS = new CookableFoodTarget[]{
-            new CookableFoodTarget("beef", CowEntity.class),
-            new CookableFoodTarget("porkchop", PigEntity.class),
-            new CookableFoodTarget("chicken", ChickenEntity.class),
-            new CookableFoodTarget("mutton", SheepEntity.class)
+            new CookableFoodTarget("beef", Cow.class),
+            new CookableFoodTarget("porkchop", Pig.class),
+            new CookableFoodTarget("chicken", Chicken.class),
+            new CookableFoodTarget("mutton", Sheep.class)
     };
     private final double _unitsNeeded;
     private final TimerGame _checkNewOptionsTimer = new TimerGame(10);
@@ -56,8 +56,8 @@ public class CollectMeatTask extends Task {
         if (count <= 0) return 0;
         for (CookableFoodTarget cookable : COOKABLE_FOODS) {
             if (food.getItem() == cookable.getRaw()) {
-                assert cookable.getCooked().getComponents().get(DataComponentTypes.FOOD) != null;
-                return count * Objects.requireNonNull(cookable.getCooked().getComponents().get(DataComponentTypes.FOOD)).nutrition();
+                assert cookable.getCooked().components().get(DataComponents.FOOD) != null;
+                return count * Objects.requireNonNull(cookable.getCooked().components().get(DataComponents.FOOD)).nutrition();
             }
         }
         return 0;
@@ -69,8 +69,8 @@ public class CollectMeatTask extends Task {
             potentialFood += getFoodPotential(food);
         }
         // Check smelting
-        ScreenHandler screen = mod.getPlayer().currentScreenHandler;
-        if (screen instanceof SmokerScreenHandler) {
+        AbstractContainerMenu screen = mod.getPlayer().containerMenu;
+        if (screen instanceof SmokerMenu) {
             potentialFood += getFoodPotential(StorageHelper.getItemStackInSlot(SmokerSlot.INPUT_SLOT_MATERIALS));
             potentialFood += getFoodPotential(StorageHelper.getItemStackInSlot(SmokerSlot.OUTPUT_SLOT));
         }
@@ -84,12 +84,12 @@ public class CollectMeatTask extends Task {
 
     @Override
     protected Task onTick(AltoClef mod) {
-        if (mod.getEntityTracker().entityFound(ChickenEntity.class)) {
-            Optional<Entity> chickens = mod.getEntityTracker().getClosestEntity(ChickenEntity.class);
+        if (mod.getEntityTracker().entityFound(Chicken.class)) {
+            Optional<Entity> chickens = mod.getEntityTracker().getClosestEntity(Chicken.class);
             if (chickens.isPresent()) {
-                Iterable<Entity> entities = mod.getWorld().getEntities();
+                Iterable<Entity> entities = mod.getWorld().entitiesForRendering();
                 for (Entity entity : entities) {
-                    if (entity instanceof HostileEntity || entity instanceof SlimeEntity) {
+                    if (entity instanceof Monster || entity instanceof Slime) {
                         if (chickens.get().hasPassenger(entity)) {
                             if (mod.getEntityTracker().isEntityReachable(entity)) {
                                 Debug.logMessage("Blacklisting chicken jockey.");
@@ -104,8 +104,8 @@ public class CollectMeatTask extends Task {
         if (_smeltTask != null && _smeltTask.isActive() && !_smeltTask.isFinished(mod)) {
             setDebugState("Cooking...");
             if (MarvionBeatMinecraftTask.getConfig().renderDistanceManipulation) {
-                MinecraftClient.getInstance().options.getViewDistance().setValue(2);
-                MinecraftClient.getInstance().options.getEntityDistanceScaling().setValue(0.5);
+                Minecraft.getInstance().options.renderDistance().set(2);
+                Minecraft.getInstance().options.entityDistanceScaling().set(0.5);
             }
             return _smeltTask;
         } else {
@@ -129,7 +129,7 @@ public class CollectMeatTask extends Task {
             for (CookableFoodTarget cookable : COOKABLE_FOODS) {
                 int rawCount = mod.getItemStorage().getItemCount(cookable.getRaw());
                 if (rawCount > 0) {
-                    //Debug.logMessage("STARTING COOK OF " + cookable.getRaw().getTranslationKey());
+                    //Debug.logMessage("STARTING COOK OF " + cookable.getRaw().getDescriptionId());
                     int toSmelt = rawCount + mod.getItemStorage().getItemCount(cookable.getCooked());
                     _smeltTask = new SmeltInSmokerTask(new SmeltTarget(new ItemTarget(cookable.cookedFood, toSmelt), new ItemTarget(cookable.rawFood, rawCount)));
                     _smeltTask.ignoreMaterials();
@@ -153,10 +153,10 @@ public class CollectMeatTask extends Task {
             Item bestRawFood = null;
             for (CookableFoodTarget cookable : COOKABLE_FOODS) {
                 if (!mod.getEntityTracker().entityFound(cookable.mobToKill)) continue;
-                Optional<Entity> nearest = mod.getEntityTracker().getClosestEntity(mod.getPlayer().getPos(), cookable.mobToKill);
+                Optional<Entity> nearest = mod.getEntityTracker().getClosestEntity(mod.getPlayer().position(), cookable.mobToKill);
                 if (nearest.isEmpty()) continue; // ?? This crashed once?
                 int hungerPerformance = cookable.getCookedUnits();
-                double sqDistance = nearest.get().squaredDistanceTo(mod.getPlayer());
+                double sqDistance = nearest.get().distanceToSqr(mod.getPlayer());
                 double score = (double) 100 * hungerPerformance / (sqDistance);
                 if (score > bestScore) {
                     bestScore = score;
@@ -165,7 +165,7 @@ public class CollectMeatTask extends Task {
                 }
             }
             if (bestEntity != null) {
-                setDebugState("Killing " + bestEntity.getType().getTranslationKey());
+                setDebugState("Killing " + bestEntity.getType().getDescriptionId());
                 Predicate<Entity> notBaby = entity -> entity instanceof LivingEntity livingEntity && !livingEntity.isBaby();
                 _currentResourceTask = killTaskOrNull(bestEntity, notBaby, bestRawFood);
                 return _currentResourceTask;
@@ -193,10 +193,10 @@ public class CollectMeatTask extends Task {
     private Task pickupTaskOrNull(AltoClef mod, Item itemToGrab, double maxRange) {
         Optional<ItemEntity> nearestDrop = Optional.empty();
         if (mod.getEntityTracker().itemDropped(itemToGrab)) {
-            nearestDrop = mod.getEntityTracker().getClosestItemDrop(mod.getPlayer().getPos(), itemToGrab);
+            nearestDrop = mod.getEntityTracker().getClosestItemDrop(mod.getPlayer().position(), itemToGrab);
         }
         if (nearestDrop.isPresent()) {
-            if (nearestDrop.get().isInRange(mod.getPlayer(), maxRange)) {
+            if (nearestDrop.get().closerThan(mod.getPlayer(), maxRange)) {
                 return new PickupDroppedItemTask(new ItemTarget(itemToGrab), true);
             }
             //return new GetToBlockTask(nearestDrop.getBlockPos(), false);
@@ -255,8 +255,8 @@ public class CollectMeatTask extends Task {
         }
 
         public int getCookedUnits() {
-            assert getCooked().getComponents().get(DataComponentTypes.FOOD) != null;
-            return Objects.requireNonNull(getCooked().getComponents().get(DataComponentTypes.FOOD)).nutrition();
+            assert getCooked().components().get(DataComponents.FOOD) != null;
+            return Objects.requireNonNull(getCooked().components().get(DataComponents.FOOD)).nutrition();
         }
     }
 }

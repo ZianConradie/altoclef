@@ -1,0 +1,925 @@
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/api/java/baritone/api/process/IBuilderProcess.java meteor-263/src/api/java/baritone/api/process/IBuilderProcess.java
+--- meteor-pristine/src/api/java/baritone/api/process/IBuilderProcess.java	2026-11-20 13:42:55.315092780 +0200
++++ meteor-263/src/api/java/baritone/api/process/IBuilderProcess.java	2026-11-20 07:01:41.471726382 +0200
+@@ -65,6 +65,10 @@
+ 
+     boolean isPaused();
+ 
++    void popStack();
++
++    boolean isFromAltoclefFinished();
++
+     void resume();
+ 
+     void clearArea(BlockPos corner1, BlockPos corner2);
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/api/java/baritone/api/utils/RayTraceUtils.java meteor-263/src/api/java/baritone/api/utils/RayTraceUtils.java
+--- meteor-pristine/src/api/java/baritone/api/utils/RayTraceUtils.java	2026-11-20 13:42:55.315574777 +0200
++++ meteor-263/src/api/java/baritone/api/utils/RayTraceUtils.java	2026-11-20 07:01:41.471796103 +0200
+@@ -31,6 +31,9 @@
+ 
+     private RayTraceUtils() {}
+ 
++    public static ClipContext.Fluid fluidHandling = ClipContext.Fluid.NONE;
++
++
+     /**
+      * Performs a block raytrace with the specified rotations. This should only be used when
+      * any entity collisions can be ignored, because this method will not recognize if an
+@@ -59,7 +62,7 @@
+                 direction.y * blockReachDistance,
+                 direction.z * blockReachDistance
+         );
+-        return entity.level().clip(new ClipContext(start, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, entity));
++        return entity.level().clip(new ClipContext(start, end, ClipContext.Block.OUTLINE, fluidHandling, entity));
+     }
+ 
+     public static Vec3 inferSneakingEyePosition(Entity entity) {
+Only in meteor-263/src/main/java/baritone: altoclef
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/behavior/InventoryBehavior.java meteor-263/src/main/java/baritone/behavior/InventoryBehavior.java
+--- meteor-pristine/src/main/java/baritone/behavior/InventoryBehavior.java	2026-11-20 13:42:55.316375806 +0200
++++ meteor-263/src/main/java/baritone/behavior/InventoryBehavior.java	2026-11-20 07:02:35.571698490 +0200
+@@ -18,6 +18,7 @@
+ package baritone.behavior;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.event.events.TickEvent;
+ import baritone.api.utils.Helper;
+ import baritone.utils.ToolSet;
+@@ -55,7 +56,7 @@
+ 
+     @Override
+     public void onTick(TickEvent event) {
+-        if (!Baritone.settings().allowInventory.value) {
++        if (!Baritone.settings().allowInventory.value || AltoClefSettings.getInstance().isInteractionPaused()) {
+             return;
+         }
+         if (event.getType() == TickEvent.Type.OUT) {
+@@ -80,6 +81,7 @@
+     }
+ 
+     public boolean attemptToPutOnHotbar(int inMainInvy, Predicate<Integer> disallowedHotbar) {
++        if (AltoClefSettings.getInstance().isInteractionPaused()) return false;
+         OptionalInt destination = getTempHotbarSlot(disallowedHotbar);
+         if (destination.isPresent()) {
+             if (!requestSwapWithHotBar(inMainInvy, destination.getAsInt())) {
+@@ -120,6 +122,7 @@
+             logDebug("Inventory move requested but delaying until stationary");
+             return false;
+         }
++        if (AltoClefSettings.getInstance().isInteractionPaused()) return false;
+         ctx.playerController().windowClick(ctx.player().inventoryMenu.containerId, inInventory < 9 ? inInventory + 36 : inInventory, inHotbar, ContainerInput.SWAP, ctx.player());
+         ticksSinceLastInventoryMove = 0;
+         lastTickRequestedMove = null;
+@@ -129,8 +132,11 @@
+     private int firstValidThrowaway() { // TODO offhand idk
+         NonNullList<ItemStack> invy = ctx.player().getInventory().getNonEquipmentItems();
+         for (int i = 0; i < invy.size(); i++) {
++            Item item = invy.get(i).getItem();
+             if (Baritone.settings().acceptableThrowawayItems.value.contains(invy.get(i).getItem())) {
+-                return i;
++                if (!AltoClefSettings.getInstance().isItemProtected(item)) {
++                    return i;
++                }
+             }
+         }
+         return -1;
+@@ -161,6 +167,7 @@
+ 
+     public boolean hasGenericThrowaway() {
+         for (Item item : Baritone.settings().acceptableThrowawayItems.value) {
++            if (AltoClefSettings.getInstance().isItemProtected(item)) continue;
+             if (throwaway(false, stack -> item.equals(stack.getItem()))) {
+                 return true;
+             }
+@@ -169,6 +176,8 @@
+     }
+ 
+     public boolean selectThrowawayForLocation(boolean select, int x, int y, int z) {
++        if (AltoClefSettings.getInstance().isInteractionPaused()) return false;
++        if (AltoClefSettings.getInstance().shouldAvoidPlacingAt(x, y, z)) return false;
+         BlockState maybe = baritone.getBuilderProcess().placeAt(x, y, z, baritone.bsi.get0(x, y, z));
+         if (maybe != null && throwaway(select, stack -> stack.getItem() instanceof BlockItem && maybe.equals(((BlockItem) stack.getItem()).getBlock().getStateForPlacement(new BlockPlaceContext(new UseOnContext(ctx.world(), ctx.player(), InteractionHand.MAIN_HAND, stack, new BlockHitResult(new Vec3(ctx.player().position().x, ctx.player().position().y, ctx.player().position().z), Direction.UP, ctx.playerFeet(), false)) {}))))) {
+             return true; // gotem
+@@ -177,6 +186,7 @@
+             return true;
+         }
+         for (Item item : Baritone.settings().acceptableThrowawayItems.value) {
++            if (AltoClefSettings.getInstance().isItemProtected(item)) continue;
+             if (throwaway(select, stack -> item.equals(stack.getItem()))) {
+                 return true;
+             }
+@@ -189,6 +199,7 @@
+     }
+ 
+     public boolean throwaway(boolean select, Predicate<? super ItemStack> desired, boolean allowInventory) {
++        if (AltoClefSettings.getInstance().isInteractionPaused()) return false;
+         LocalPlayer p = ctx.player();
+         NonNullList<ItemStack> inv = p.getInventory().getNonEquipmentItems();
+         for (int i = 0; i < 9; i++) {
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/pathing/calc/PathNode.java meteor-263/src/main/java/baritone/pathing/calc/PathNode.java
+--- meteor-pristine/src/main/java/baritone/pathing/calc/PathNode.java	2026-11-20 13:42:55.317244161 +0200
++++ meteor-263/src/main/java/baritone/pathing/calc/PathNode.java	2026-11-20 07:01:41.471935080 +0200
+@@ -17,6 +17,7 @@
+ 
+ package baritone.pathing.calc;
+ 
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.pathing.goals.Goal;
+ import baritone.api.pathing.movement.ActionCosts;
+ import baritone.api.utils.BetterBlockPos;
+@@ -67,7 +68,11 @@
+     public PathNode(int x, int y, int z, Goal goal) {
+         this.previous = null;
+         this.cost = ActionCosts.COST_INF;
+-        this.estimatedCostToGoal = goal.heuristic(x, y, z);
++        double originalCost = goal.heuristic(x, y, z);
++        if (Double.isNaN(originalCost)) {
++            throw new IllegalStateException(goal + " calculated implausible heuristic");
++        }
++        this.estimatedCostToGoal = AltoClefSettings.getInstance().applyGlobalHeuristic(originalCost, x, y, z);
+         if (Double.isNaN(estimatedCostToGoal)) {
+             throw new IllegalStateException(String.format(
+                     "%s calculated implausible heuristic NaN at %s %s %s",
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/pathing/movement/CalculationContext.java meteor-263/src/main/java/baritone/pathing/movement/CalculationContext.java
+--- meteor-pristine/src/main/java/baritone/pathing/movement/CalculationContext.java	2026-11-20 13:42:55.317293966 +0200
++++ meteor-263/src/main/java/baritone/pathing/movement/CalculationContext.java	2026-11-20 07:01:41.471981602 +0200
+@@ -18,6 +18,7 @@
+ package baritone.pathing.movement;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.IBaritone;
+ import baritone.api.pathing.movement.ActionCosts;
+ import baritone.cache.WorldData;
+@@ -37,6 +38,7 @@
+ import net.minecraft.world.item.enchantment.effects.EnchantmentAttributeEffect;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.EndPortalFrameBlock;
+ import net.minecraft.world.level.block.state.BlockState;
+ 
+ import java.util.ArrayList;
+@@ -100,11 +102,11 @@
+         this.worldData = (WorldData) baritone.getPlayerContext().worldData();
+         this.bsi = new BlockStateInterface(baritone.getPlayerContext(), forUseOnAnotherThread);
+         this.toolSet = new ToolSet(player);
+-        this.hasThrowaway = Baritone.settings().allowPlace.value && ((Baritone) baritone).getInventoryBehavior().hasGenericThrowaway();
++        this.hasThrowaway = !AltoClefSettings.getInstance().isInteractionPaused() && Baritone.settings().allowPlace.value && ((Baritone) baritone).getInventoryBehavior().hasGenericThrowaway();
+         this.hasWaterBucket = Baritone.settings().allowWaterBucketFall.value && Inventory.isHotbarSlot(player.getInventory().findSlotMatchingItem(STACK_BUCKET_WATER)) && world.dimension() != Level.NETHER;
+         this.canSprint = Baritone.settings().allowSprint.value && player.getFoodData().getFoodLevel() > 6;
+         this.placeBlockCost = Baritone.settings().blockPlacementPenalty.value;
+-        this.allowBreak = Baritone.settings().allowBreak.value;
++        this.allowBreak = !AltoClefSettings.getInstance().isInteractionPaused() && Baritone.settings().allowBreak.value;
+         this.allowBreakAnyway = new ArrayList<>(Baritone.settings().allowBreakAnyway.value);
+         this.allowParkour = Baritone.settings().allowParkour.value;
+         this.allowParkourPlace = Baritone.settings().allowParkourPlace.value;
+@@ -197,6 +199,9 @@
+         if (!Baritone.settings().allowPlaceInFluidsFlow.value && !current.getFluidState().isEmpty() && !current.getFluidState().isSource()) {
+             return COST_INF;
+         }
++        if (AltoClefSettings.getInstance().shouldAvoidPlacingAt(x, y, z)) {
++            return COST_INF;
++        }
+         return placeBlockCost;
+     }
+ 
+@@ -207,6 +212,10 @@
+         if (isPossiblyProtected(x, y, z)) {
+             return COST_INF;
+         }
++        if (AltoClefSettings.getInstance().shouldAvoidBreaking(new BlockPos(x, y, z))
++                || current.getBlock() instanceof EndPortalFrameBlock) {
++            return COST_INF;
++        }
+         return 1;
+     }
+ 
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/pathing/movement/MovementHelper.java meteor-263/src/main/java/baritone/pathing/movement/MovementHelper.java
+--- meteor-pristine/src/main/java/baritone/pathing/movement/MovementHelper.java	2026-11-20 13:42:55.317320441 +0200
++++ meteor-263/src/main/java/baritone/pathing/movement/MovementHelper.java	2026-11-20 07:03:00.455698395 +0200
+@@ -18,6 +18,7 @@
+ package baritone.pathing.movement;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.BaritoneAPI;
+ import baritone.api.IBaritone;
+ import baritone.api.pathing.movement.ActionCosts;
+@@ -33,6 +34,7 @@
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.Holder;
+ import net.minecraft.util.Mth;
++import net.minecraft.world.level.block.EndPortalFrameBlock;
+ import net.minecraft.world.entity.EquipmentSlot;
+ import net.minecraft.world.item.enchantment.Enchantment;
+ import net.minecraft.world.item.enchantment.Enchantments;
+@@ -67,11 +69,16 @@
+ public interface MovementHelper extends ActionCosts, Helper {
+ 
+     static boolean avoidBreaking(BlockStateInterface bsi, int x, int y, int z, BlockState state) {
++        if (bsi.get0(x, y + 1, z).getBlock() instanceof EndPortalFrameBlock) {
++            return true;
++        }
++        if (AltoClefSettings.getInstance().shouldAvoidBreaking(new BlockPos(x, y, z))) return true;
+         if (!bsi.worldBorder.canPlaceAt(x, z)) {
+             return true;
+         }
+         Block b = state.getBlock();
+         return Baritone.settings().blocksToDisallowBreaking.value.contains(b)
++                || b instanceof EndPortalFrameBlock
+                 || b == Blocks.ICE // ice becomes water, and water can mess up the path
+                 || b instanceof InfestedBlock // obvious reasons
+                 // call context.get directly with x,y,z. no need to make 5 new BlockPos for no reason
+@@ -129,6 +136,14 @@
+ 
+     static boolean canWalkThrough(BlockStateInterface bsi, int x, int y, int z, BlockState state) {
+         Ternary canWalkThrough = canWalkThroughBlockState(state);
++        Block block = state.getBlock();
++        BlockState up = bsi.get0(x, y + 1, z);
++        if (AltoClefSettings.getInstance().canSwimThroughLava() && block == Blocks.LAVA) {
++            return up.getFluidState().isEmpty();
++        }
++        if (AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(x, y, z)) {
++            return false;
++        }
+         if (canWalkThrough == YES) {
+             return true;
+         }
+@@ -277,6 +292,9 @@
+     static boolean fullyPassable(IPlayerContext ctx, BlockPos pos) {
+         BlockState state = ctx.world().getBlockState(pos);
+         Ternary fullyPassable = fullyPassableBlockState(state);
++        if (AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(pos)) {
++            return false;
++        }
+         if (fullyPassable == YES) {
+             return true;
+         }
+@@ -375,6 +393,7 @@
+                 || block == Blocks.CACTUS
+                 || block == Blocks.SWEET_BERRY_BUSH
+                 || block instanceof BaseFireBlock
++                || block instanceof EndPortalFrameBlock
+                 || block == Blocks.END_PORTAL
+                 || block == Blocks.COBWEB
+                 || block == Blocks.BUBBLE_COLUMN;
+@@ -396,6 +415,8 @@
+      */
+     static boolean canWalkOn(BlockStateInterface bsi, int x, int y, int z, BlockState state) {
+         Ternary canWalkOn = canWalkOnBlockState(state);
++        if (AltoClefSettings.getInstance().canWalkOnForce(x, y, z)) return true;
++        if (AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(x, y + 1, z)) return false;
+         if (canWalkOn == YES) {
+             return true;
+         }
+@@ -407,6 +428,14 @@
+ 
+     static Ternary canWalkOnBlockState(BlockState state) {
+         Block block = state.getBlock();
++        // Extra blocks we may want to walk on.
++        if (block instanceof EndPortalFrameBlock) {
++            return YES;
++        }
++        if (block == Blocks.END_PORTAL && AltoClefSettings.getInstance().isCanWalkOnEndPortal()) {
++            return YES;
++        }
++        // ****************************************
+         if (isBlockNormalCube(state) && (block != Blocks.MAGMA_BLOCK || Baritone.settings().allowWalkOnMagmaBlocks.value) && block != Blocks.BUBBLE_COLUMN && block != Blocks.HONEY_BLOCK) {
+             return YES;
+         }
+@@ -577,6 +606,7 @@
+     }
+ 
+     static boolean canPlaceAgainst(BlockStateInterface bsi, int x, int y, int z, BlockState state) {
++        if (AltoClefSettings.getInstance().shouldAvoidPlacingAt(x, y, z)) return false;
+         if (!bsi.worldBorder.canPlaceAt(x, z)) {
+             return false;
+         }
+@@ -621,6 +651,9 @@
+             if (strVsBlock <= 0) {
+                 return COST_INF;
+             }
++            if (AltoClefSettings.getInstance().shouldAvoidBreaking(x, y, z)) {
++                return COST_INF;
++            }
+             double result = 1 / strVsBlock;
+             result += context.breakBlockAdditionalCost;
+             result *= mult;
+@@ -658,6 +691,7 @@
+      * @param ts  previously calculated ToolSet
+      */
+     static void switchToBestToolFor(IPlayerContext ctx, BlockState b, ToolSet ts, boolean preferSilkTouch) {
++        if (AltoClefSettings.getInstance().isInteractionPaused()) return;
+         if (Baritone.settings().autoTool.value && !Baritone.settings().assumeExternalAutoTool.value) {
+             ctx.player().getInventory().setSelectedSlot(ts.getBestSlot(b.getBlock(), preferSilkTouch));
+         }
+@@ -718,7 +752,10 @@
+      */
+     static boolean isWater(BlockState state) {
+         Fluid f = state.getFluidState().getType();
+-        return f == Fluids.WATER || f == Fluids.FLOWING_WATER;
++        if (f == Fluids.WATER || f == Fluids.FLOWING_WATER) {
++            return true;
++        }
++        return (f == Fluids.LAVA || f == Fluids.FLOWING_LAVA) && AltoClefSettings.getInstance().canSwimThroughLava();
+     }
+ 
+     /**
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/pathing/movement/movements/MovementDescend.java meteor-263/src/main/java/baritone/pathing/movement/movements/MovementDescend.java
+--- meteor-pristine/src/main/java/baritone/pathing/movement/movements/MovementDescend.java	2026-11-20 13:42:55.317465464 +0200
++++ meteor-263/src/main/java/baritone/pathing/movement/movements/MovementDescend.java	2026-11-20 07:03:04.475698380 +0200
+@@ -18,6 +18,7 @@
+ package baritone.pathing.movement.movements;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.IBaritone;
+ import baritone.api.pathing.movement.MovementStatus;
+ import baritone.api.utils.BetterBlockPos;
+@@ -281,9 +282,13 @@
+             return true;
+         }
+         for (int y = 0; y <= 2; y++) { // we could hit any of the three blocks
++            BlockPos p = into.above(y);
+             if (MovementHelper.avoidWalkingInto(BlockStateInterface.get(ctx, into.above(y)))) {
+                 return true;
+             }
++            if (AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(p)) {
++                return true;
++            }
+         }
+         return false;
+     }
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/pathing/movement/movements/MovementFall.java meteor-263/src/main/java/baritone/pathing/movement/movements/MovementFall.java
+--- meteor-pristine/src/main/java/baritone/pathing/movement/movements/MovementFall.java	2026-11-20 13:42:55.317465464 +0200
++++ meteor-263/src/main/java/baritone/pathing/movement/movements/MovementFall.java	2026-11-20 07:01:41.472214084 +0200
+@@ -17,6 +17,7 @@
+ 
+ package baritone.pathing.movement.movements;
+ 
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.IBaritone;
+ import baritone.api.pathing.movement.MovementStatus;
+ import baritone.api.utils.BetterBlockPos;
+@@ -101,7 +102,8 @@
+         }
+ 
+         boolean isWater = destState.getFluidState().getType() instanceof WaterFluid;
+-        if (!isWater && willPlaceBucket() && !playerFeet.equals(dest)) {
++        if (!isWater && willPlaceBucket() && !playerFeet.equals(dest) &&
++                !AltoClefSettings.getInstance().shouldNotPlaceBucketButStillFall()) {
+             if (!Inventory.isHotbarSlot(ctx.player().getInventory().findSlotMatchingItem(STACK_BUCKET_WATER)) || ctx.world().dimension() == Level.NETHER) {
+                 return state.setStatus(MovementStatus.UNREACHABLE);
+             }
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java meteor-263/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java
+--- meteor-pristine/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java	2026-11-20 13:42:55.317465464 +0200
++++ meteor-263/src/main/java/baritone/pathing/movement/movements/MovementTraverse.java	2026-11-20 07:01:41.472256827 +0200
+@@ -18,6 +18,7 @@
+ package baritone.pathing.movement.movements;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.IBaritone;
+ import baritone.api.pathing.movement.MovementStatus;
+ import baritone.api.utils.BetterBlockPos;
+@@ -193,6 +194,9 @@
+             if (MovementHelper.avoidWalkingInto(pb1)) {
+                 return state;
+             }
++            if (AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(positionsToBreak[0]) || AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(positionsToBreak[1])) {
++                return state;
++            }
+             // and we aren't already pressed up against the block
+             double dist = Math.max(Math.abs(ctx.player().position().x - (dest.getX() + 0.5D)), Math.abs(ctx.player().position().z - (dest.getZ() + 0.5D)));
+             if (dist < 0.83) {
+@@ -286,7 +290,7 @@
+         } else {
+             wasTheBridgeBlockAlwaysThere = false;
+             Block standingOn = BlockStateInterface.get(ctx, feet.below()).getBlock();
+-            if (standingOn.equals(Blocks.SOUL_SAND) || standingOn instanceof SlabBlock) { // see issue #118
++            if ((standingOn.equals(Blocks.SOUL_SAND) && !AltoClefSettings.getInstance().shouldTreatSoulSandAsOrdinaryBlock()) || standingOn instanceof SlabBlock) { // see issue #118
+                 double dist = Math.max(Math.abs(dest.getX() + 0.5 - ctx.player().position().x), Math.abs(dest.getZ() + 0.5 - ctx.player().position().z));
+                 if (dist < 0.85) { // 0.5 + 0.3 + epsilon
+                     MovementHelper.moveTowards(ctx, state, dest);
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/pathing/path/PathExecutor.java meteor-263/src/main/java/baritone/pathing/path/PathExecutor.java
+--- meteor-pristine/src/main/java/baritone/pathing/path/PathExecutor.java	2026-11-20 13:42:55.317655673 +0200
++++ meteor-263/src/main/java/baritone/pathing/path/PathExecutor.java	2026-11-20 07:01:41.472311844 +0200
+@@ -18,6 +18,7 @@
+ package baritone.pathing.path;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.pathing.calc.IPath;
+ import baritone.api.pathing.movement.ActionCosts;
+ import baritone.api.pathing.movement.IMovement;
+@@ -560,6 +561,10 @@
+         if (MovementHelper.avoidWalkingInto(ctx.world().getBlockState(current.getSrc().above(3)))) {
+             return false;
+         }
++        if (AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(current.getSrc().above(3)) ||
++                AltoClefSettings.getInstance().shouldAvoidWalkThroughForce(current.getSrc().above(2))) {
++            return false;
++        }
+         return !MovementHelper.avoidWalkingInto(ctx.world().getBlockState(next.getDest().above(2))); // codacy smh my head
+     }
+ 
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/process/BuilderProcess.java meteor-263/src/main/java/baritone/process/BuilderProcess.java
+--- meteor-pristine/src/main/java/baritone/process/BuilderProcess.java	2026-11-20 13:42:55.317706256 +0200
++++ meteor-263/src/main/java/baritone/process/BuilderProcess.java	2026-11-20 07:08:05.900374324 +0200
+@@ -18,6 +18,7 @@
+ package baritone.process;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.pathing.goals.Goal;
+ import baritone.api.pathing.goals.GoalBlock;
+ import baritone.api.pathing.goals.GoalComposite;
+@@ -33,6 +34,7 @@
+ import baritone.pathing.movement.CalculationContext;
+ import baritone.pathing.movement.Movement;
+ import baritone.pathing.movement.MovementHelper;
++import baritone.pathing.path.PathExecutor;
+ import baritone.utils.BaritoneProcessHelper;
+ import baritone.utils.BlockStateInterface;
+ import baritone.utils.PathingCommandContext;
+@@ -43,9 +45,11 @@
+ import baritone.utils.schematic.schematica.SchematicaHelper;
+ import com.google.common.collect.ImmutableSet;
+ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
++import net.minecraft.ChatFormatting;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.Vec3i;
++import net.minecraft.network.chat.Component;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.item.BlockItem;
+ import net.minecraft.world.item.ItemStack;
+@@ -90,13 +94,56 @@
+     private int numRepeats;
+     private List<BlockState> approxPlaceable;
+     public int stopAtHeight = 0;
++    private final Map<BlockState, Integer> protectedItems = new HashMap<>();
++    private boolean fromAltoclef;
++    private Map<BlockState, Integer> missing;
++    private boolean active;
++    private Stack<Object> stateStack = new Stack<>();
+ 
+     public BuilderProcess(Baritone baritone) {
+         super(baritone);
+     }
+ 
++    private Vec3i schemSize;
++    private boolean fromAltoclefFinished;
++    private Map<BlockPos, HistoryInfo> blockBreakHistory = new HashMap<>();
++
++    private void pushState() {
++        stateStack.clear();
++        stateStack.push(this.approxPlaceable);
++        stateStack.push(this.ticks);
++        stateStack.push(this.incorrectPositions);
++        stateStack.push(this.name);
++        stateStack.push(this.schematic);
++        stateStack.push(this.realSchematic);
++        stateStack.push(this.origin);
++        stateStack.push(this.paused);
++        stateStack.push(this.layer);
++        stateStack.push(this.numRepeats);
++        stateStack.push(this.observedCompleted);
++        stateStack.push(this.active);
++        stateStack.push(this.missing);
++        stateStack.push(this.schemSize);
++        stateStack.push(this.fromAltoclefFinished);
++        stateStack.push(this.fromAltoclef);
++    }
++
++    @Override
++    public double priority() {
++        return super.priority();
++    }
++
++    @Override
++    public String displayName() {
++        return super.displayName();
++    }
++
+     @Override
+     public void build(String name, ISchematic schematic, Vec3i origin) {
++        //Shouldn't get initially called
++        if (this.fromAltoclef && this.stateStack.isEmpty()) {
++            pushState();
++        }
+         this.name = name;
+         this.schematic = schematic;
+         this.realSchematic = null;
+@@ -155,10 +202,81 @@
+         this.numRepeats = 0;
+         this.observedCompleted = new LongOpenHashSet();
+         this.incorrectPositions = null;
++        this.active = true;
++        if (this.missing != null) {
++            this.missing.clear();
++        } else {
++            missing = new HashMap<>();
++        }
++        this.schemSize = new Vec3i(schematic.widthX(), schematic.heightY(), schematic.lengthZ());
++        this.fromAltoclefFinished = false;
++        this.fromAltoclef = false;
++    }
++
++    private void protectItemOfMissing() {
++        if (missing != null) {
++            protectedItems.putAll(missing);
++            protectedItems.keySet().forEach(e -> {
++                if (!AltoClefSettings.getInstance().isItemProtected(e.getBlock().asItem())) {
++                    AltoClefSettings.getInstance().protectItem(e.getBlock().asItem());
++                }
++            });
++        }
++    }
++
++    @Override
++    public void popStack() {
++        if (this.stateStack.isEmpty()) {
++            logDebug("ERROR in BuildProcess: No state present to pop");
++            return;
++        }
++        this.fromAltoclef = (boolean) stateStack.pop();
++        this.fromAltoclefFinished = (boolean) stateStack.pop();
++        this.schemSize = (Vec3i) stateStack.pop();
++        this.missing = (Map<BlockState, Integer>) stateStack.pop();
++        this.active = (boolean) stateStack.pop();
++        this.observedCompleted = (LongOpenHashSet) stateStack.pop();
++        this.numRepeats = (int) stateStack.pop();
++        this.layer = (int) stateStack.pop();
++        this.paused = (boolean) stateStack.pop();
++        this.origin = (Vec3i) stateStack.pop();
++        this.realSchematic = (ISchematic) stateStack.pop();
++        this.schematic = (ISchematic) stateStack.pop();
++        this.name = (String) stateStack.pop();
++        this.incorrectPositions = (HashSet<BetterBlockPos>) stateStack.pop();
++        this.ticks = (int) stateStack.pop();
++        this.approxPlaceable = (List<BlockState>) stateStack.pop();
++        pushState();
++        if (!stateStack.isEmpty()) {
++            logDebug("ERROR: state stack was not empty after state restoration. Will throw away the rest for now.");
++            stateStack.clear();
++        }
++    }
++
++    @Override
++    public boolean isFromAltoclefFinished() {
++        return this.fromAltoclefFinished;
++    }
++
++    private void stopProtectItemOfMissing() {
++        if (protectedItems != null && protectedItems.size() > 0) {
++            protectedItems.keySet().forEach(e -> {
++                if (AltoClefSettings.getInstance().isItemProtected(e.getBlock().asItem())) {
++                    AltoClefSettings.getInstance().stopProtectingItem(e.getBlock().asItem());
++                }
++            });
++        }
++        assert protectedItems != null;
++        protectedItems.clear();
+     }
+ 
+     public void resume() {
+-        paused = false;
++        if (!this.stateStack.isEmpty()) {
++            popStack();
++        }
++
++        this.paused = false;
++        this.active = true;
+     }
+ 
+     public void pause() {
+@@ -340,6 +458,7 @@
+     }
+ 
+     public boolean placementPlausible(BlockPos pos, BlockState state) {
++        if (state == null) return false;
+         VoxelShape voxelshape = state.getCollisionShape(ctx.world(), pos);
+         return voxelshape.isEmpty() || ctx.world().isUnobstructed(null, voxelshape.move(pos.getX(), pos.getY(), pos.getZ()));
+     }
+@@ -380,6 +499,23 @@
+         return Optional.empty();
+     }
+ 
++    private BlockPos getFromHistory(final BlockPos pos) {
++        if (pos == null) return null;
++
++        final Optional<BlockPos> opt = blockBreakHistory.keySet().stream()
++                .filter(e -> e.getX() == pos.getX() && e.getY() == pos.getY() && e.getZ() == pos.getZ()).findFirst();
++
++        if (opt.isPresent()) {
++            return opt.get();
++        }
++
++        return null;
++    }
++
++    private boolean anyHistoryMatch(final BlockPos pos) {
++        return getFromHistory(pos) != null; //blockBreakHistory.keySet().stream().anyMatch(e -> e.getX() == pos.getX() && e.getY() == pos.getY() && e.getZ() == pos.getZ());
++    }
++
+     private OptionalInt hasAnyItemThatWouldPlace(BlockState desired, HitResult result, Rotation rot) {
+         for (int i = 0; i < 9; i++) {
+             ItemStack stack = ctx.player().getInventory().getNonEquipmentItems().get(i);
+@@ -437,6 +573,17 @@
+         return onTick(calcFailed, isSafeToCancel, 0);
+     }
+ 
++    private void noteRemoval(final BlockPos pos) {
++        if (pos == null) return;
++        if (anyHistoryMatch(pos)) {
++            final BlockPos orig = getFromHistory(pos);
++            final HistoryInfo info = blockBreakHistory.get(orig);
++            if (!info.brokenPreviously) {
++                info.brokenPreviously = true;
++            }
++        }
++    }
++
+     private PathingCommand onTick(boolean calcFailed, boolean isSafeToCancel, int recursions) {
+         if (recursions > 100) { // onTick calls itself, don't crash
+             return new PathingCommand(null, PathingCommandType.SET_GOAL_AND_PATH);
+@@ -514,7 +661,13 @@
+                 if (Baritone.settings().notificationOnBuildFinished.value) {
+                     logNotification("Done building", false);
+                 }
++                if (this.fromAltoclef) {
++                    this.fromAltoclefFinished = true;
++                }
+                 onLostControl();
++                if (this.fromAltoclefFinished) {
++                    this.stateStack.clear();
++                }
+                 return null;
+             }
+             // build repeat time
+@@ -545,13 +698,15 @@
+                 baritone.getInputOverrideHandler().setInputForceState(Input.SNEAK, true);
+             }
+             if (ctx.isLookingAt(pos) || ctx.playerRotations().isReallyCloseTo(rot)) {
++                if (anyHistoryMatch(pos))
++                    noteRemoval(pos);
+                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
+             }
+             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
+         }
+         List<BlockState> desirableOnHotbar = new ArrayList<>();
+         Optional<Placement> toPlace = searchForPlacables(bcc, desirableOnHotbar);
+-        if (toPlace.isPresent() && isSafeToCancel && ctx.player().onGround() && ticks <= 0) {
++        if (!AltoClefSettings.getInstance().isInteractionPaused() && toPlace.isPresent() && isSafeToCancel && ctx.player().onGround() && ticks <= 0) {
+             Rotation rot = toPlace.get().rot;
+             baritone.getLookBehavior().updateTarget(rot, true);
+             ctx.player().getInventory().setSelectedSlot(toPlace.get().hotbarSelection);
+@@ -559,10 +714,11 @@
+             if ((ctx.isLookingAt(toPlace.get().placeAgainst) && ((BlockHitResult) ctx.objectMouseOver()).getDirection().equals(toPlace.get().side)) || ctx.playerRotations().isReallyCloseTo(rot)) {
+                 baritone.getInputOverrideHandler().setInputForceState(Input.CLICK_RIGHT, true);
+             }
++            stopProtectItemOfMissing();
+             return new PathingCommand(null, PathingCommandType.CANCEL_AND_SET_GOAL);
+         }
+ 
+-        if (Baritone.settings().allowInventory.value) {
++        if (!AltoClefSettings.getInstance().isInteractionPaused() && Baritone.settings().allowInventory.value) {
+             ArrayList<Integer> usefulSlots = new ArrayList<>();
+             List<BlockState> noValidHotbarOption = new ArrayList<>();
+             outer:
+@@ -604,9 +760,19 @@
+                 return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
+             }
+         }
++        updateMovement();
+         return new PathingCommandContext(goal, PathingCommandType.FORCE_REVALIDATE_GOAL_AND_PATH, bcc);
+     }
+ 
++    private void updateMovement() {
++        PathExecutor exec = baritone.getPathingBehavior().getCurrent();
++        if (exec == null || exec.finished() || exec.failed()) {
++            return;
++        }
++        Movement movement = (Movement) exec.getPath().movements().get(exec.getPosition());
++        movement.update();
++    }
++
+     private boolean recalc(BuilderCalculationContext bcc) {
+         if (incorrectPositions == null) {
+             incorrectPositions = new HashSet<>();
+@@ -764,6 +930,66 @@
+         return new GoalComposite(toBreak.toArray(new Goal[0]));
+     }
+ 
++    @Override
++    public void logToast(Component title, Component message) {
++        super.logToast(title, message);
++    }
++
++    @Override
++    public void logToast(String message) {
++        super.logToast(message);
++    }
++
++    @Override
++    public void logNotification(String message) {
++        super.logNotification(message);
++    }
++
++    @Override
++    public void logNotification(String message, boolean error) {
++        super.logNotification(message, error);
++    }
++
++    @Override
++    public void logNotificationDirect(String message) {
++        super.logNotificationDirect(message);
++    }
++
++    @Override
++    public void logNotificationDirect(String message, boolean error) {
++        super.logNotificationDirect(message, error);
++    }
++
++    @Override
++    public void logDebug(String message) {
++        super.logDebug(message);
++    }
++
++    @Override
++    public void logDirect(boolean logAsToast, Component... components) {
++        super.logDirect(logAsToast, components);
++    }
++
++    @Override
++    public void logDirect(Component... components) {
++        super.logDirect(components);
++    }
++
++    @Override
++    public void logDirect(String message, ChatFormatting color, boolean logAsToast) {
++        super.logDirect(message, color, logAsToast);
++    }
++
++    @Override
++    public void logDirect(String message, ChatFormatting color) {
++        super.logDirect(message, color);
++    }
++
++    @Override
++    public void logDirect(String message) {
++        super.logDirect(message);
++    }
++
+     public static class JankyGoalComposite implements Goal {
+ 
+         private final Goal primary;
+@@ -970,6 +1196,9 @@
+ 
+     @Override
+     public void onLostControl() {
++        if (this.fromAltoclef && this.stateStack.isEmpty()) {
++            pushState();
++        }
+         incorrectPositions = null;
+         name = null;
+         schematic = null;
+@@ -978,6 +1207,12 @@
+         numRepeats = 0;
+         paused = false;
+         observedCompleted = null;
++        origin = null;
++        missing = null;
++        schemSize = null;
++        fromAltoclef = false;
++        active = false;
++        blockBreakHistory.clear();
+     }
+ 
+     @Override
+@@ -1175,4 +1410,8 @@
+             }
+         }
+     }
++    private final class HistoryInfo {
++        public long counter = 0;
++        public boolean brokenPreviously = false;
++    }
+ }
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/process/MineProcess.java meteor-263/src/main/java/baritone/process/MineProcess.java
+--- meteor-pristine/src/main/java/baritone/process/MineProcess.java	2026-11-20 13:42:55.317706256 +0200
++++ meteor-263/src/main/java/baritone/process/MineProcess.java	2026-11-20 07:04:41.915698008 +0200
+@@ -18,12 +18,14 @@
+ package baritone.process;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.BaritoneAPI;
+ import baritone.api.pathing.goals.*;
+ import baritone.api.process.IMineProcess;
+ import baritone.api.process.PathingCommand;
+ import baritone.api.process.PathingCommandType;
+ import baritone.api.utils.*;
++import baritone.api.utils.Rotation;
+ import baritone.api.utils.input.Input;
+ import baritone.cache.CachedChunk;
+ import baritone.pathing.movement.CalculationContext;
+@@ -35,10 +37,7 @@
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.item.ItemEntity;
+ import net.minecraft.world.item.ItemStack;
+-import net.minecraft.world.level.block.AirBlock;
+-import net.minecraft.world.level.block.Block;
+-import net.minecraft.world.level.block.Blocks;
+-import net.minecraft.world.level.block.FallingBlock;
++import net.minecraft.world.level.block.*;
+ import net.minecraft.world.level.block.state.BlockState;
+ 
+ import java.util.*;
+@@ -100,7 +99,10 @@
+                 return null;
+             }
+         }
+-
++        // Wait for pause interactions
++        if (AltoClefSettings.getInstance().isInteractionPaused()) {
++            return new PathingCommand(null, PathingCommandType.REQUEST_PAUSE);
++        }
+         updateLoucaSystem();
+         int mineGoalUpdateInterval = Baritone.settings().mineGoalUpdateInterval.value;
+         List<BlockPos> curr = new ArrayList<>(knownOreLocations);
+@@ -359,6 +361,7 @@
+     public static List<BlockPos> searchWorld(CalculationContext ctx, BlockOptionalMetaLookup filter, int max, List<BlockPos> alreadyKnown, List<BlockPos> blacklist, List<BlockPos> dropped) {
+         List<BlockPos> locs = new ArrayList<>();
+         List<Block> untracked = new ArrayList<>();
++        int maxTotal = max * filter.blocks().size();
+         for (BlockOptionalMeta bom : filter.blocks()) {
+             Block block = bom.getBlock();
+             if (CachedChunk.BLOCKS_TO_KEEP_TRACK_OF.contains(block)) {
+@@ -379,7 +382,7 @@
+ 
+         locs = prune(ctx, locs, filter, max, blacklist, dropped);
+ 
+-        if (!untracked.isEmpty() || (Baritone.settings().extendCacheOnThreshold.value && locs.size() < max)) {
++        if (!untracked.isEmpty() || (Baritone.settings().extendCacheOnThreshold.value && locs.size() < maxTotal)) {
+             locs.addAll(BaritoneAPI.getProvider().getWorldScanner().scanChunkRadius(
+                     ctx.getBaritone().getPlayerContext(),
+                     filter,
+@@ -486,6 +489,11 @@
+ 
+     public static boolean plausibleToBreak(CalculationContext ctx, BlockPos pos) {
+         BlockState state = ctx.bsi.get0(pos);
++        if (state.getBlock() instanceof EndPortalFrameBlock ||
++                state.getBlock() instanceof EndPortalBlock ||
++                state.getBlock() == Blocks.LAVA) {
++            return true;
++        }
+         if (MovementHelper.getMiningDurationTicks(ctx, pos.getX(), pos.getY(), pos.getZ(), state, true) >= COST_INF) {
+             return false;
+         }
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/utils/InputOverrideHandler.java meteor-263/src/main/java/baritone/utils/InputOverrideHandler.java
+--- meteor-pristine/src/main/java/baritone/utils/InputOverrideHandler.java	2026-11-20 13:42:55.318126704 +0200
++++ meteor-263/src/main/java/baritone/utils/InputOverrideHandler.java	2026-11-20 07:01:41.472630847 +0200
+@@ -18,6 +18,7 @@
+ package baritone.utils;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import baritone.api.BaritoneAPI;
+ import baritone.api.event.events.TickEvent;
+ import baritone.api.utils.IInputOverrideHandler;
+@@ -87,6 +88,10 @@
+         if (event.getType() == TickEvent.Type.OUT) {
+             return;
+         }
++        if (AltoClefSettings.getInstance().isInteractionPaused()) {
++            setInputForceState(Input.CLICK_LEFT, false);
++            setInputForceState(Input.CLICK_RIGHT, false);
++        }
+         if (isInputForcedDown(Input.CLICK_LEFT)) {
+             setInputForceState(Input.CLICK_RIGHT, false);
+         }
+diff -ru '--exclude=build' '--exclude=.gradle' '--exclude=.git' '--exclude=*.orig' meteor-pristine/src/main/java/baritone/utils/ToolSet.java meteor-263/src/main/java/baritone/utils/ToolSet.java
+--- meteor-pristine/src/main/java/baritone/utils/ToolSet.java	2026-11-20 13:42:55.318126704 +0200
++++ meteor-263/src/main/java/baritone/utils/ToolSet.java	2026-11-20 07:01:41.472667346 +0200
+@@ -18,6 +18,7 @@
+ package baritone.utils;
+ 
+ import baritone.Baritone;
++import baritone.altoclef.AltoClefSettings;
+ import net.minecraft.client.player.LocalPlayer;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.component.DataComponents;
+@@ -229,7 +230,9 @@
+                 }
+             }
+         }
+-
++        if (AltoClefSettings.getInstance().shouldForceUseTool(state, item)) {
++            return Double.POSITIVE_INFINITY;
++        }
+         speed /= hardness;
+         if (!state.requiresCorrectToolForDrops() || (!item.isEmpty() && item.isCorrectToolForDrops(state))) {
+             return speed / 30;

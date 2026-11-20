@@ -13,13 +13,13 @@ import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.slots.CraftingTableSlot;
 import adris.altoclef.util.slots.PlayerSlot;
 import adris.altoclef.util.slots.Slot;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.RecipeEntry;
-import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.ContainerInput;
 
 import java.util.Optional;
+import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 
 public class CraftGenericWithRecipeBooksTask extends Task implements ITaskUsesCraftingGrid {
 
@@ -67,22 +67,22 @@ public class CraftGenericWithRecipeBooksTask extends Task implements ITaskUsesCr
                 moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
                 if (moveTo.isPresent()) {
                     // Click the slot to move the item to the player's inventory
-                    mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlot(moveTo.get(), 0, ContainerInput.PICKUP);
                     return null;
                 }
                 // Check if the item can be thrown away
                 if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
                     // Click an undefined slot to throw away the item
-                    mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
                     return null;
                 }
                 // Find the garbage slot and click it to move the item there
                 garbage = StorageHelper.getGarbageSlot(mod);
                 if (garbage.isPresent()) {
-                    mod.getSlotHandler().clickSlot(garbage.get(), 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlot(garbage.get(), 0, ContainerInput.PICKUP);
                 }
                 // Click an undefined slot to clear the cursor stack
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
             } else {
                 // Close the screen
                 StorageHelper.closeScreen();
@@ -106,20 +106,20 @@ public class CraftGenericWithRecipeBooksTask extends Task implements ITaskUsesCr
             moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
             if (moveTo.isPresent()) {
                 // Click the slot to move the item to the player's inventory
-                mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlot(moveTo.get(), 0, ContainerInput.PICKUP);
                 return null;
             }
             // Check if the item can be thrown away
             if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
                 // Click an undefined slot to throw away the item
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
                 return null;
             }
             // Find the garbage slot and click it to move the item there
             garbage = StorageHelper.getGarbageSlot(mod);
-            garbage.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
+            garbage.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, ContainerInput.PICKUP));
             // Click an undefined slot to clear the cursor stack
-            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
             return null;
         }
 
@@ -135,13 +135,14 @@ public class CraftGenericWithRecipeBooksTask extends Task implements ITaskUsesCr
             }
         }
 
-        Optional<RecipeEntry<?>> recipeToSend = JankCraftingRecipeMapping.getMinecraftMappedRecipe(_target.getRecipe(), _target.getOutputItem());
-        if (recipeToSend.isPresent()) {
+        Optional<net.minecraft.world.item.crafting.display.RecipeDisplayId> displayId =
+                JankCraftingRecipeMapping.getMinecraftMappedRecipe(_target.getRecipe(), _target.getOutputItem());
+        if (displayId.isPresent()) {
             if (mod.getSlotHandler().canDoSlotAction()) {
-                ClientPlayerEntity player = MinecraftClient.getInstance().player;
+                LocalPlayer player = Minecraft.getInstance().player;
                 assert player != null;
                 // Click the recipe to send it
-                mod.getController().clickRecipe(player.currentScreenHandler.syncId, recipeToSend.get(), true);
+                mod.getController().handlePlaceRecipe(player.containerMenu.containerId, displayId.get(), true);
                 mod.getSlotHandler().registerSlotAction();
             }
         }

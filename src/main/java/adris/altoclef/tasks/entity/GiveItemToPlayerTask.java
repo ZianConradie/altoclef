@@ -12,9 +12,9 @@ import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.slots.Slot;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,13 +52,13 @@ public class GiveItemToPlayerTask extends Task {
             return _throwTask;
         }
 
-        Optional<Vec3d> lastPos = mod.getEntityTracker().getPlayerMostRecentPosition(_playerName);
+        Optional<Vec3> lastPos = mod.getEntityTracker().getPlayerMostRecentPosition(_playerName);
 
         if (lastPos.isEmpty()) {
             setDebugState("No player found/detected. Doing nothing until player loads into render distance.");
             return null;
         }
-        Vec3d targetPos = lastPos.get().add(0, 0.2f, 0);
+        Vec3 targetPos = lastPos.get().add(0, 0.2f, 0);
 
         if (_droppingItems) {
             // THROW ITEMS
@@ -76,16 +76,16 @@ public class GiveItemToPlayerTask extends Task {
                             target = new ItemTarget(target, target.getTargetCount() - stack.getCount());
                             _throwTarget.set(i, target);
                             Debug.logMessage("THROWING: " + has.get());
-                            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
                         } else {
-                            mod.getSlotHandler().clickSlot(currentlyPresent, 0, SlotActionType.PICKUP);
+                            mod.getSlotHandler().clickSlot(currentlyPresent, 0, ContainerInput.PICKUP);
                         }
                         return null;
                     }
                 }
             }
 
-            if (!targetPos.isInRange(mod.getPlayer().getPos(), 4)) {
+            if (!targetPos.closerThan(mod.getPlayer().position(), 4)) {
                 mod.log("Finished giving items.");
                 stop(mod);
                 return null;
@@ -98,7 +98,7 @@ public class GiveItemToPlayerTask extends Task {
             return _resourceTask;
         }
 
-        if (targetPos.isInRange(mod.getPlayer().getPos(), 1.5)) {
+        if (targetPos.closerThan(mod.getPlayer().position(), 1.5)) {
             if (!mod.getEntityTracker().isPlayerLoaded(_playerName)) {
                 mod.logWarning("Failed to get to player \"" + _playerName + "\". We moved to where we last saw them but now have no idea where they are.");
                 stop(mod);

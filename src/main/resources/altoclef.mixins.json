@@ -2,14 +2,13 @@
   "required": true,
   "minVersion": "0.8",
   "package": "adris.altoclef.mixins",
-  "compatibilityLevel": "JAVA_8",
+  "compatibilityLevel": "JAVA_25",
   "mixins": [
     "AbstractFurnaceScreenHandlerAccessor",
     "BlockModifiedByPlayerMixin",
     "ClientBlockBreakAccessor",
     "ClientConnectionAccessor",
     "ClientInteractWithBlockMixin",
-    "ClientPlayerInteractionAccessor",
     "ClientUIMixin",
     "DeathScreenAccessor",
     "GameOverlayMixin",
@@ -25,7 +24,6 @@
     "ClientTickMixin",
     "EntryMixin",
     "LoadChunkMixin",
-    "MixinLocalPlayer",
     "PlayerCollidesWithEntityMixin"
   ],
   "injectors": {

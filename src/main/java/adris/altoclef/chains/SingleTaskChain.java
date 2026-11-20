@@ -15,9 +15,9 @@ public abstract class SingleTaskChain extends TaskChain {
 
     private AltoClef _mod;
 
-    public SingleTaskChain(TaskRunner runner) {
-        super(runner);
-        _mod = runner.getMod();
+    public SingleTaskChain(TaskRunner task) {
+        super(task);
+        _mod = task.getMod();
     }
 
     @Override

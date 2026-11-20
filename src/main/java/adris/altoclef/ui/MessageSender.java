@@ -3,8 +3,8 @@ package adris.altoclef.ui;
 import adris.altoclef.Debug;
 import adris.altoclef.util.time.BaseTimer;
 import adris.altoclef.util.time.TimerReal;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 import java.util.Comparator;
 import java.util.PriorityQueue;
@@ -72,11 +72,11 @@ public class MessageSender {
     }
 
     private void sendChatInstant(String message) {
-        if (MinecraftClient.getInstance().player == null) {
+        if (Minecraft.getInstance().player == null) {
             Debug.logError("Failed to send chat message as no client loaded.");
             return;
         }
-        MinecraftClient.getInstance().player.sendMessage(Text.of(message));
+        Minecraft.getInstance().player.sendSystemMessage(Component.literal(message));
     }
 
     private static abstract class BaseMessage {

@@ -5,10 +5,9 @@ import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.slots.PlayerSlot;
-import net.minecraft.entity.Entity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.SwordItem;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.List;
 
@@ -39,17 +38,17 @@ public abstract class AbstractKillEntityTask extends AbstractDoToEntityTask {
             float handDamage = Float.NEGATIVE_INFINITY;
             Item bestItem = null;
             for (ItemStack invStack : invStacks) {
-                if (invStack.getItem() instanceof SwordItem item) {
-                    float itemDamage = item.getMaterial().getAttackDamage();
-                    Item handItem = StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot()).getItem();
-                    if (handItem instanceof SwordItem handToolItem) {
-                        handDamage = handToolItem.getMaterial().getAttackDamage();
-                    }
-                    if (itemDamage > handDamage) {
-                        bestItem = item;
-                    } else {
-                        bestItem = handItem;
-                    }
+                float itemDamage = adris.altoclef.util.helpers.CombatHelper.getAttackDamage(invStack);
+                if (itemDamage <= 0) {
+                    continue;
+                }
+                Item handItem = StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot()).getItem();
+                handDamage = adris.altoclef.util.helpers.CombatHelper.getAttackDamage(
+                        StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot()));
+                if (itemDamage > handDamage) {
+                    bestItem = invStack.getItem();
+                } else {
+                    bestItem = handItem;
                 }
             }
             return bestItem;
@@ -71,10 +70,10 @@ public abstract class AbstractKillEntityTask extends AbstractDoToEntityTask {
     protected Task onEntityInteract(AltoClef mod, Entity entity) {
         // Equip weapon
         if (!equipWeapon(mod)) {
-            float hitProg = mod.getPlayer().getAttackCooldownProgress(0);
+            float hitProg = mod.getPlayer().getAttackStrengthScale(0);
             if (hitProg >= 1) {
-                if (mod.getPlayer().isOnGround() || mod.getPlayer().getVelocity().getY() < 0 || mod.getPlayer().isTouchingWater()) {
-                    LookHelper.lookAt(mod, entity.getEyePos());
+                if (mod.getPlayer().onGround() || mod.getPlayer().getDeltaMovement().y() < 0 || mod.getPlayer().isInWater()) {
+                    LookHelper.lookAt(mod, entity.getEyePosition());
                     mod.getControllerExtras().attack(entity);
                 }
             }

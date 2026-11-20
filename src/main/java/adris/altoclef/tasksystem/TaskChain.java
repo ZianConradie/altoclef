@@ -9,8 +9,8 @@ public abstract class TaskChain {
 
     private final List<Task> _cachedTaskChain = new ArrayList<>();
 
-    public TaskChain(TaskRunner runner) {
-        runner.addTaskChain(this);
+    public TaskChain(TaskRunner task) {
+        task.addTaskChain(this);
     }
 
     public void tick(AltoClef mod) {

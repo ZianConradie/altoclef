@@ -2,43 +2,53 @@ package adris.altoclef.mixins;
 
 import adris.altoclef.eventbus.EventBus;
 import adris.altoclef.eventbus.events.SlotClickChangedEvent;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.ScreenHandler;
-import net.minecraft.screen.slot.Slot;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.collection.DefaultedList;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Mixin(ScreenHandler.class)
+@Mixin(AbstractContainerMenu.class)
 public class SlotClickMixin {
 
-    @Redirect(
-            method = "internalOnSlotClick",
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/screen/ScreenHandler;internalOnSlotClick(IILnet/minecraft/screen/slot/SlotActionType;Lnet/minecraft/entity/player/PlayerEntity;)V")
+    private NonNullList<Slot> slots() {
+        return ((AbstractContainerMenu) (Object) this).slots;
+    }
+
+    private final ThreadLocal<List<ItemStack>> _beforeStacks = ThreadLocal.withInitial(ArrayList::new);
+
+    @Inject(
+            method = "clicked",
+            at = @At("HEAD")
     )
-    private void slotClick(ScreenHandler self, int slotIndex, int button, SlotActionType actionType, PlayerEntity player) {
-        // TODO: "self" is misleading, reread Mixin docs to understand the implications here.
-
-        // This calculation is already done, BUT we also want a "before&after" type beat.
-
-        DefaultedList<Slot> afterSlots = self.slots;
-        List<ItemStack> beforeStacks = new ArrayList<>(afterSlots.size());
-        for (Slot slot : afterSlots) {
-            beforeStacks.add(slot.getStack().copy());
+    private void onSlotClickBegin(int slotIndex, int button, ContainerInput actionType, Player player, CallbackInfo ci) {
+        List<Slot> slots = slots();
+        List<ItemStack> beforeStacks = new ArrayList<>(slots.size());
+        for (Slot slot : slots) {
+            beforeStacks.add(slot.getItem().copy());
         }
-        // Perform slot changes potentially
-        self.onSlotClick(slotIndex, button, actionType, player);
-        // Check for changes and alert
-        for (int i = 0; i < beforeStacks.size(); ++i) {
+        _beforeStacks.set(beforeStacks);
+    }
+
+    @Inject(
+            method = "clicked",
+            at = @At("RETURN")
+    )
+    private void onSlotClickEnd(int slotIndex, int button, ContainerInput actionType, Player player, CallbackInfo ci) {
+        List<ItemStack> beforeStacks = _beforeStacks.get();
+        NonNullList<Slot> slots = slots();
+        for (int i = 0; i < beforeStacks.size() && i < slots.size(); ++i) {
             ItemStack before = beforeStacks.get(i);
-            ItemStack after = afterSlots.get(i).getStack();
-            if (!ItemStack.areEqual(before, after)) {
+            ItemStack after = slots.get(i).getItem();
+            if (!ItemStack.matches(before, after)) {
                 adris.altoclef.util.slots.Slot slot = adris.altoclef.util.slots.Slot.getFromCurrentScreen(i);
                 EventBus.publish(new SlotClickChangedEvent(slot, before, after));
             }

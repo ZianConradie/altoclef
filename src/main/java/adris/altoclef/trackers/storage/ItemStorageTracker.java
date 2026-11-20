@@ -6,10 +6,10 @@ import adris.altoclef.trackers.TrackerManager;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.slots.*;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
 import org.apache.commons.lang3.ArrayUtils;
 
 import java.util.Arrays;
@@ -266,15 +266,15 @@ public class ItemStorageTracker extends Tracker {
         return getCachedContainers(cache -> true);
     }
 
-    public Optional<ContainerCache> getContainerClosestTo(Vec3d pos, Predicate<ContainerCache> accept) {
+    public Optional<ContainerCache> getContainerClosestTo(Vec3 pos, Predicate<ContainerCache> accept) {
         return _containers.getClosestTo(pos, accept);
     }
 
-    public Optional<ContainerCache> getContainerClosestTo(Vec3d pos, ContainerType... types) {
+    public Optional<ContainerCache> getContainerClosestTo(Vec3 pos, ContainerType... types) {
         return _containers.getClosestTo(pos, types);
     }
 
-    public Optional<ContainerCache> getContainerClosestTo(Vec3d pos) {
+    public Optional<ContainerCache> getContainerClosestTo(Vec3 pos) {
         return getContainerClosestTo(pos, cache -> true);
     }
 
@@ -282,7 +282,7 @@ public class ItemStorageTracker extends Tracker {
         return _containers.getContainersWithItem(items);
     }
 
-    public Optional<ContainerCache> getClosestContainerWithItem(Vec3d pos, Item... items) {
+    public Optional<ContainerCache> getClosestContainerWithItem(Vec3 pos, Item... items) {
         return _containers.getClosestWithItem(pos, items);
     }
 

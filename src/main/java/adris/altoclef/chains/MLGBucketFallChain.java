@@ -9,14 +9,15 @@ import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.time.TimerGame;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.input.Input;
-import net.minecraft.block.Blocks;
-import net.minecraft.entity.effect.StatusEffects;
-import net.minecraft.item.Items;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.ClipContext;
 
 import java.util.Optional;
+import net.minecraft.world.item.ItemStack;
 
 @SuppressWarnings("UnnecessaryLocalVariable")
 public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverridesGrounded {
@@ -27,8 +28,8 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
     private boolean _wasPickingUp = false;
     private boolean _doingChorusFruit = false;
 
-    public MLGBucketFallChain(TaskRunner runner) {
-        super(runner);
+    public MLGBucketFallChain(TaskRunner task) {
+        super(task);
     }
 
     @Override
@@ -56,11 +57,11 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
                         isPlacedWater = false;
                     }
                     //Debug.logInternal("PLACED: " + placed);
-                    if (placed != null && placed.isWithinDistance(mod.getPlayer().getPos(), 5.5) && isPlacedWater) {
+                    if (placed != null && placed.closerThan(mod.getPlayer().blockPosition(), 5.5) && isPlacedWater) {
                         BlockPos toInteract = placed;
                         // Allow looking at fluids
                         mod.getBehaviour().push();
-                        mod.getBehaviour().setRayTracingFluidHandling(RaycastContext.FluidHandling.SOURCE_ONLY);
+                        mod.getBehaviour().setRayTracingFluidHandling(ClipContext.Fluid.SOURCE_ONLY);
                         Optional<Rotation> reach = LookHelper.getReach(toInteract, Direction.UP);
                         if (reach.isPresent()) {
                             mod.getClientBaritone().getLookBehavior().updateTarget(reach.get(), true);
@@ -91,9 +92,9 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
             _wasPickingUp = false;
             _lastMLG = null;
         }
-        if (mod.getPlayer().hasStatusEffect(StatusEffects.LEVITATION) &&
-                !mod.getPlayer().getItemCooldownManager().isCoolingDown(Items.CHORUS_FRUIT) &&
-                mod.getPlayer().getActiveStatusEffects().get(StatusEffects.LEVITATION).getDuration() <= 70 &&
+        if (mod.getPlayer().hasEffect(MobEffects.LEVITATION) &&
+                !mod.getPlayer().getCooldowns().isOnCooldown(new ItemStack(Items.CHORUS_FRUIT)) &&
+                mod.getPlayer().getActiveEffectsMap().get(MobEffects.LEVITATION).getDuration() <= 70 &&
                 mod.getItemStorage().hasItemInventoryOnly(Items.CHORUS_FRUIT) &&
                 !mod.getItemStorage().hasItemInventoryOnly(Items.WATER_BUCKET)) {
             _doingChorusFruit = true;
@@ -132,11 +133,11 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
         if (!mod.getModSettings().shouldAutoMLGBucket()) {
             return false;
         }
-        if (mod.getPlayer().isSwimming() || mod.getPlayer().isTouchingWater() || mod.getPlayer().isOnGround() || mod.getPlayer().isClimbing()) {
+        if (mod.getPlayer().isSwimming() || mod.getPlayer().isInWater() || mod.getPlayer().onGround() || mod.getPlayer().onClimbable()) {
             // We're grounded.
             return false;
         }
-        double ySpeed = mod.getPlayer().getVelocity().y;
+        double ySpeed = mod.getPlayer().getDeltaMovement().y;
         return ySpeed < -0.7;
     }
 }

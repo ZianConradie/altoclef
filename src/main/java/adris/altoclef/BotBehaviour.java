@@ -3,15 +3,14 @@ package adris.altoclef;
 import adris.altoclef.util.slots.Slot;
 import baritone.altoclef.AltoClefSettings;
 import baritone.api.Settings;
-import baritone.api.utils.RayTraceUtils;
-import net.minecraft.block.BlockState;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.entity.Entity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.Pair;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.RaycastContext;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import adris.altoclef.util.Pair;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ClipContext;
 
 import java.util.*;
 import java.util.function.BiFunction;
@@ -135,7 +134,7 @@ public class BotBehaviour {
         current().applyState();
     }
 
-    public void setRayTracingFluidHandling(RaycastContext.FluidHandling fluidHandling) {
+    public void setRayTracingFluidHandling(ClipContext.Fluid fluidHandling) {
         current().rayFluidHandling = fluidHandling;
         //Debug.logMessage("OOF: " + fluidHandling);
         current().applyState();
@@ -245,7 +244,7 @@ public class BotBehaviour {
             Debug.logError("State stack is empty after pop. This shouldn't be happening.");
             return null;
         }
-        _states.peek().applyState();
+        _states.getLast().applyState();
         return popped;
     }
 
@@ -254,7 +253,7 @@ public class BotBehaviour {
             Debug.logError("STATE EMPTY, UNEMPTIED!");
             push();
         }
-        return _states.peek();
+        return _states.getLast();
     }
 
     class State {
@@ -289,7 +288,7 @@ public class BotBehaviour {
         public boolean pauseOnLostFocus = true;
 
         // Hard coded stuff
-        public RaycastContext.FluidHandling rayFluidHandling;
+        public ClipContext.Fluid rayFluidHandling;
 
         // Other necessary stuff
         public boolean escapeLava = true;
@@ -356,11 +355,12 @@ public class BotBehaviour {
             }
             _allowWalkThroughFlowingWater = settings.isFlowingWaterPassAllowed();
 
-            rayFluidHandling = RayTraceUtils.fluidHandling;
+            // NOTE: `RayTraceUtils.fluidHandling` is not reachable from AltoClef, so this stays
+            // per-state instead of global.
         }
 
         private void readMinecraftState() {
-            pauseOnLostFocus = MinecraftClient.getInstance().options.pauseOnLostFocus;
+            pauseOnLostFocus = Minecraft.getInstance().options.pauseOnLostFocus;
         }
 
         /**
@@ -407,10 +407,9 @@ public class BotBehaviour {
             sa.allowSwimThroughLava(swimThroughLava);
 
             // Extra / hard coded
-            RayTraceUtils.fluidHandling = rayFluidHandling;
 
             // Minecraft
-            MinecraftClient.getInstance().options.pauseOnLostFocus = pauseOnLostFocus;
+            Minecraft.getInstance().options.pauseOnLostFocus = pauseOnLostFocus;
         }
     }
 }

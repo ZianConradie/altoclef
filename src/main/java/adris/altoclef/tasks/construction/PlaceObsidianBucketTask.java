@@ -11,11 +11,11 @@ import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.progresscheck.MovementProgressChecker;
 import baritone.api.utils.input.Input;
-import net.minecraft.block.Blocks;
-import net.minecraft.item.Items;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.Vec3i;
 
 /**
  * Places obsidian at a position using buckets and a cast.
@@ -50,7 +50,7 @@ public class PlaceObsidianBucketTask extends Task {
         // Don't break cast
         mod.getBehaviour().avoidBlockBreaking(block -> {
             for (Vec3i castPosRelativeToLava : PlaceObsidianBucketTask.CAST_FRAME) {
-                BlockPos castPos = _pos.add(castPosRelativeToLava);
+                BlockPos castPos = _pos.offset(castPosRelativeToLava);
                 if (block.equals(castPos)) {
                     return true;
                 }
@@ -59,7 +59,7 @@ public class PlaceObsidianBucketTask extends Task {
         });
         // Don't place blocks inside our cast water/lava
         mod.getBehaviour().avoidBlockPlacing(block -> {
-            BlockPos waterTarget = _pos.up();
+            BlockPos waterTarget = _pos.above();
             return block.equals(_pos) || block.equals(waterTarget);
         });
 
@@ -81,8 +81,8 @@ public class PlaceObsidianBucketTask extends Task {
         }
 
         // Clear leftover water
-        if (mod.getBlockTracker().blockIsValid(_pos, Blocks.OBSIDIAN) && mod.getBlockTracker().blockIsValid(_pos.up(), Blocks.WATER)) {
-            return new ClearLiquidTask(_pos.up());
+        if (mod.getBlockTracker().blockIsValid(_pos, Blocks.OBSIDIAN) && mod.getBlockTracker().blockIsValid(_pos.above(), Blocks.WATER)) {
+            return new ClearLiquidTask(_pos.above());
         }
 
         // Make sure we have a water bucket
@@ -132,7 +132,7 @@ public class PlaceObsidianBucketTask extends Task {
             _currentCastTarget = null;
         }
         for (Vec3i castPosRelative : CAST_FRAME) {
-            BlockPos castPos = _pos.add(castPosRelative);
+            BlockPos castPos = _pos.offset(castPosRelative);
             if (!WorldHelper.isSolid(mod, castPos)) {
                 _currentCastTarget = castPos;
                 return null;
@@ -143,10 +143,10 @@ public class PlaceObsidianBucketTask extends Task {
         if (mod.getWorld().getBlockState(_pos).getBlock() != Blocks.LAVA) {
             // Don't place lava at our position!
             // Would lead to an embarrassing death.
-            BlockPos targetPos = _pos.add(-1, 1, 0);
-            if (!mod.getPlayer().getBlockPos().equals(targetPos) && mod.getItemStorage().hasItem(Items.LAVA_BUCKET)) {
+            BlockPos targetPos = _pos.offset(-1, 1, 0);
+            if (!mod.getPlayer().blockPosition().equals(targetPos) && mod.getItemStorage().hasItem(Items.LAVA_BUCKET)) {
                 if (!mod.getClientBaritone().getPathingBehavior().isPathing()
-                        && targetPos.isWithinDistance(mod.getPlayer().getBlockPos(), 2)) {
+                        && targetPos.closerThan(mod.getPlayer().blockPosition(), 2)) {
                     mod.getInputControls().hold(Input.SNEAK);
                     mod.getInputControls().hold(Input.MOVE_BACK);
                 } else {
@@ -161,33 +161,33 @@ public class PlaceObsidianBucketTask extends Task {
                 return null;
             }
             // Clear the upper two as well, to make placing more reliable.
-            if (WorldHelper.isSolid(mod, _pos.up())) {
-                _currentDestroyTarget = _pos.up();
+            if (WorldHelper.isSolid(mod, _pos.above())) {
+                _currentDestroyTarget = _pos.above();
                 return null;
             }
-            if (WorldHelper.isSolid(mod, _pos.up(2))) {
-                _currentDestroyTarget = _pos.up(2);
+            if (WorldHelper.isSolid(mod, _pos.above(2))) {
+                _currentDestroyTarget = _pos.above(2);
                 return null;
             }
-            return new InteractWithBlockTask(new ItemTarget(Items.LAVA_BUCKET, 1), Direction.WEST, _pos.add(1, 0, 0), false);
+            return new InteractWithBlockTask(new ItemTarget(Items.LAVA_BUCKET, 1), Direction.WEST, _pos.offset(1, 0, 0), false);
         }
         // Lava placed, Now, place water.
-        BlockPos waterCheck = _pos.up();
+        BlockPos waterCheck = _pos.above();
         if (mod.getWorld().getBlockState(waterCheck).getBlock() != Blocks.WATER) {
             // Get to position to avoid weird stuck scenario
-            BlockPos targetPos = _pos.add(-1, 1, 0);
-            if (!mod.getPlayer().getBlockPos().equals(targetPos) && mod.getItemStorage().hasItem(Items.WATER_BUCKET)) {
+            BlockPos targetPos = _pos.offset(-1, 1, 0);
+            if (!mod.getPlayer().blockPosition().equals(targetPos) && mod.getItemStorage().hasItem(Items.WATER_BUCKET)) {
                 return new GetToBlockTask(targetPos, false);
             }
             if (WorldHelper.isSolid(mod, waterCheck)) {
                 _currentDestroyTarget = waterCheck;
                 return null;
             }
-            if (WorldHelper.isSolid(mod, waterCheck.up())) {
-                _currentDestroyTarget = waterCheck.up();
+            if (WorldHelper.isSolid(mod, waterCheck.above())) {
+                _currentDestroyTarget = waterCheck.above();
                 return null;
             }
-            return new InteractWithBlockTask(new ItemTarget(Items.WATER_BUCKET, 1), Direction.WEST, _pos.add(1, 1, 0), true);
+            return new InteractWithBlockTask(new ItemTarget(Items.WATER_BUCKET, 1), Direction.WEST, _pos.offset(1, 1, 0), true);
         }
         return null;
     }
@@ -227,7 +227,7 @@ public class PlaceObsidianBucketTask extends Task {
         boolean isObsidian = blockTracker.blockIsValid(pos, Blocks.OBSIDIAN);
 
         // Check if there is no water block above the specified position
-        boolean isNotWaterAbove = !blockTracker.blockIsValid(pos.up(), Blocks.WATER);
+        boolean isNotWaterAbove = !blockTracker.blockIsValid(pos.above(), Blocks.WATER);
 
         // The task is considered finished if the block is obsidian and there is no water above
         boolean isFinished = isObsidian && isNotWaterAbove;

@@ -13,13 +13,13 @@ import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.helpers.WorldHelper;
-import net.minecraft.entity.AreaEffectCloudEntity;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.boss.dragon.EnderDragonEntity;
-import net.minecraft.entity.decoration.EndCrystalEntity;
-import net.minecraft.entity.projectile.DragonFireballEntity;
-import net.minecraft.item.Items;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.entity.AreaEffectCloud;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.entity.projectile.hurtingprojectile.DragonFireball;
+import net.minecraft.world.item.Items;
+import net.minecraft.core.BlockPos;
 
 import java.util.Optional;
 
@@ -56,7 +56,7 @@ public class WaitForDragonAndPearlTask extends Task implements IDragonWaiter {
 
     @Override
     public void setExitPortalTop(BlockPos top) {
-        BlockPos actualTarget = top.down();
+        BlockPos actualTarget = top.below();
         if (!actualTarget.equals(_targetToPearl)) {
             _targetToPearl = actualTarget;
             _throwPearlTask = new ThrowEnderPearlSimpleProjectileTask(actualTarget);
@@ -79,16 +79,16 @@ public class WaitForDragonAndPearlTask extends Task implements IDragonWaiter {
             return _throwPearlTask;
         }
 
-        if (_pillarUpFurther != null && _pillarUpFurther.isActive() && !_pillarUpFurther.isFinished(mod) && (mod.getEntityTracker().getClosestEntity(AreaEffectCloudEntity.class).isPresent())) {
+        if (_pillarUpFurther != null && _pillarUpFurther.isActive() && !_pillarUpFurther.isFinished(mod) && (mod.getEntityTracker().getClosestEntity(AreaEffectCloud.class).isPresent())) {
 
-            Optional<Entity> cloud = mod.getEntityTracker().getClosestEntity(AreaEffectCloudEntity.class);
+            Optional<Entity> cloud = mod.getEntityTracker().getClosestEntity(AreaEffectCloud.class);
 
-            if (cloud.isPresent() && cloud.get().isInRange(mod.getPlayer(), 4)) {
+            if (cloud.isPresent() && cloud.get().closerThan(mod.getPlayer(), 4)) {
                 setDebugState("PILLAR UP FURTHER to avoid dragon's breath");
                 return _pillarUpFurther;
             }
 
-            Optional<Entity> fireball = mod.getEntityTracker().getClosestEntity(DragonFireballEntity.class);
+            Optional<Entity> fireball = mod.getEntityTracker().getClosestEntity(DragonFireball.class);
 
             if (isFireballDangerous(mod, fireball)) {
                 setDebugState("PILLAR UP FURTHER to avoid dragon's breath");
@@ -103,46 +103,46 @@ public class WaitForDragonAndPearlTask extends Task implements IDragonWaiter {
 
         int minHeight = _targetToPearl.getY() + HEIGHT - 3;
 
-        int deltaY = minHeight - mod.getPlayer().getBlockPos().getY();
+        int deltaY = minHeight - mod.getPlayer().blockPosition().getY();
         if (StorageHelper.getBuildingMaterialCount(mod) < Math.min(deltaY - 10, HEIGHT - 5) || _buildingMaterialsTask.isActive() && !_buildingMaterialsTask.isFinished(mod)) {
             setDebugState("Collecting building materials...");
             return _buildingMaterialsTask;
         }
 
         // Our trigger to throw is that the dragon starts perching. We can be an arbitrary distance and we'll still do it lol
-        if (_dragonIsPerching && LookHelper.cleanLineOfSight(mod.getPlayer(), _targetToPearl.up(), 300)) {
+        if (_dragonIsPerching && LookHelper.cleanLineOfSight(mod.getPlayer(), _targetToPearl.above(), 300)) {
             Debug.logMessage("THROWING PEARL!!");
             return _throwPearlTask;
         }
-        if (mod.getPlayer().getBlockPos().getY() < minHeight) {
+        if (mod.getPlayer().blockPosition().getY() < minHeight) {
             if (mod.getEntityTracker().entityFound(entity ->
-                    mod.getPlayer().getPos().isInRange(entity.getPos(), 4), AreaEffectCloudEntity.class)) {
-                if (mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).isPresent() &&
+                    mod.getPlayer().position().closerThan(entity.position(), 4), AreaEffectCloud.class)) {
+                if (mod.getEntityTracker().getClosestEntity(EnderDragon.class).isPresent() &&
                         !mod.getClientBaritone().getPathingBehavior().isPathing()) {
-                    LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).get().getEyePos());
+                    LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragon.class).get().getEyePosition());
                 }
                 return null;
             }
             if (_heightPillarTask != null && _heightPillarTask.isActive() && !_heightPillarTask.isFinished(mod)) {
                 setDebugState("Pillaring up!");
                 inCenter = true;
-                if (mod.getEntityTracker().entityFound(EndCrystalEntity.class)) {
+                if (mod.getEntityTracker().entityFound(EndCrystal.class)) {
                     return new DoToClosestEntityTask(
                             (toDestroy) -> {
-                                if (toDestroy.isInRange(mod.getPlayer(), 7)) {
+                                if (toDestroy.closerThan(mod.getPlayer(), 7)) {
                                     mod.getControllerExtras().attack(toDestroy);
                                 }
-                                if (mod.getPlayer().getBlockPos().getY() < minHeight) {
+                                if (mod.getPlayer().blockPosition().getY() < minHeight) {
                                     return _heightPillarTask;
                                 } else {
-                                    if (mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).isPresent() &&
+                                    if (mod.getEntityTracker().getClosestEntity(EnderDragon.class).isPresent() &&
                                             !mod.getClientBaritone().getPathingBehavior().isPathing()) {
-                                        LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).get().getEyePos());
+                                        LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragon.class).get().getEyePosition());
                                     }
                                     return null;
                                 }
                             },
-                            EndCrystalEntity.class
+                            EndCrystal.class
                     );
                 }
                 return _heightPillarTask;
@@ -150,43 +150,43 @@ public class WaitForDragonAndPearlTask extends Task implements IDragonWaiter {
         } else {
             setDebugState("We're high enough.");
             // If a fireball is too close, run UP
-            Optional<Entity> dragonFireball = mod.getEntityTracker().getClosestEntity(DragonFireballEntity.class);
-            if (dragonFireball.isPresent() && dragonFireball.get().isInRange(mod.getPlayer(), DRAGON_FIREBALL_TOO_CLOSE_RANGE) && LookHelper.cleanLineOfSight(mod.getPlayer(), dragonFireball.get().getPos(), DRAGON_FIREBALL_TOO_CLOSE_RANGE)) {
+            Optional<Entity> dragonFireball = mod.getEntityTracker().getClosestEntity(DragonFireball.class);
+            if (dragonFireball.isPresent() && dragonFireball.get().closerThan(mod.getPlayer(), DRAGON_FIREBALL_TOO_CLOSE_RANGE) && LookHelper.cleanLineOfSight(mod.getPlayer(), dragonFireball.get().position(), DRAGON_FIREBALL_TOO_CLOSE_RANGE)) {
                 _pillarUpFurther = new GetToYTask(mod.getPlayer().getBlockY() + 5);
                 Debug.logMessage("HOLDUP");
                 return _pillarUpFurther;
             }
-            if (mod.getEntityTracker().entityFound(EndCrystalEntity.class)) {
+            if (mod.getEntityTracker().entityFound(EndCrystal.class)) {
                 return new DoToClosestEntityTask(
                         (toDestroy) -> {
-                            if (toDestroy.isInRange(mod.getPlayer(), 7)) {
+                            if (toDestroy.closerThan(mod.getPlayer(), 7)) {
                                 mod.getControllerExtras().attack(toDestroy);
                             }
-                            if (mod.getPlayer().getBlockPos().getY() < minHeight) {
+                            if (mod.getPlayer().blockPosition().getY() < minHeight) {
                                 return _heightPillarTask;
                             } else {
-                                if (mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).isPresent() &&
+                                if (mod.getEntityTracker().getClosestEntity(EnderDragon.class).isPresent() &&
                                         !mod.getClientBaritone().getPathingBehavior().isPathing()) {
-                                    LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).get().getEyePos());
+                                    LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragon.class).get().getEyePosition());
                                 }
                                 return null;
                             }
                         },
-                        EndCrystalEntity.class
+                        EndCrystal.class
                 );
             }
-            if (mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).isPresent() &&
+            if (mod.getEntityTracker().getClosestEntity(EnderDragon.class).isPresent() &&
                     !mod.getClientBaritone().getPathingBehavior().isPathing()) {
-                LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).get().getEyePos());
+                LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragon.class).get().getEyePosition());
             }
             return null;
         }
-        if (!WorldHelper.inRangeXZ(mod.getPlayer(), _targetToPearl, XZ_RADIUS_TOO_FAR) && mod.getPlayer().getPos().getY() < minHeight && !_hasPillar) {
+        if (!WorldHelper.inRangeXZ(mod.getPlayer(), _targetToPearl, XZ_RADIUS_TOO_FAR) && mod.getPlayer().position().y() < minHeight && !_hasPillar) {
             if (mod.getEntityTracker().entityFound(entity ->
-                    mod.getPlayer().getPos().isInRange(entity.getPos(), 4), AreaEffectCloudEntity.class)) {
-                if (mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).isPresent() &&
+                    mod.getPlayer().position().closerThan(entity.position(), 4), AreaEffectCloud.class)) {
+                if (mod.getEntityTracker().getClosestEntity(EnderDragon.class).isPresent() &&
                         !mod.getClientBaritone().getPathingBehavior().isPathing()) {
-                    LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragonEntity.class).get().getEyePos());
+                    LookHelper.lookAt(mod, mod.getEntityTracker().getClosestEntity(EnderDragon.class).get().getEyePosition());
                 }
                 return null;
             }
@@ -205,8 +205,8 @@ public class WaitForDragonAndPearlTask extends Task implements IDragonWaiter {
         if (!fireball.isPresent())
             return false;
 
-        boolean fireballTooClose = fireball.get().isInRange(mod.getPlayer(), DRAGON_FIREBALL_TOO_CLOSE_RANGE);
-        boolean fireballInSight = LookHelper.cleanLineOfSight(mod.getPlayer(), fireball.get().getPos(), DRAGON_FIREBALL_TOO_CLOSE_RANGE);
+        boolean fireballTooClose = fireball.get().closerThan(mod.getPlayer(), DRAGON_FIREBALL_TOO_CLOSE_RANGE);
+        boolean fireballInSight = LookHelper.cleanLineOfSight(mod.getPlayer(), fireball.get().position(), DRAGON_FIREBALL_TOO_CLOSE_RANGE);
 
         return fireballTooClose && fireballInSight;
     }

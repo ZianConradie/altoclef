@@ -6,7 +6,7 @@ import adris.altoclef.commandsystem.Arg;
 import adris.altoclef.commandsystem.ArgParser;
 import adris.altoclef.commandsystem.Command;
 import adris.altoclef.commandsystem.CommandException;
-import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.Minecraft;
 
 public class SetGammaCommand extends Command {
 
@@ -18,6 +18,6 @@ public class SetGammaCommand extends Command {
     protected void call(AltoClef mod, ArgParser parser) throws CommandException {
         double gammaValue = parser.get(Double.class);
         Debug.logMessage("Gamma set to " + gammaValue);
-        MinecraftClient.getInstance().options.getGamma().setValue(gammaValue);
+        Minecraft.getInstance().options.gamma().set(gammaValue);
     }
 }

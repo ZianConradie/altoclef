@@ -20,20 +20,20 @@ import adris.altoclef.ui.CommandStatusOverlay;
 import adris.altoclef.ui.MessagePriority;
 import adris.altoclef.ui.MessageSender;
 import adris.altoclef.util.helpers.InputHelper;
-import baritone.Baritone;
 import baritone.altoclef.AltoClefSettings;
 import baritone.api.BaritoneAPI;
+import baritone.api.IBaritone;
 import baritone.api.Settings;
 import net.fabricmc.api.ModInitializer;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
-import net.minecraft.client.network.ClientPlayerInteractionManager;
-import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.item.Item;
-import net.minecraft.item.Items;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -80,7 +80,7 @@ public class AltoClef implements ModInitializer {
 
     // Are we in game (playing in a server/world)
     public static boolean inGame() {
-        return MinecraftClient.getInstance().player != null && MinecraftClient.getInstance().getNetworkHandler() != null;
+        return Minecraft.getInstance().player != null && Minecraft.getInstance().getConnection() != null;
     }
 
     /**
@@ -172,7 +172,7 @@ public class AltoClef implements ModInitializer {
         // Tick with the client
         EventBus.subscribe(ClientTickEvent.class, evt -> onClientTick());
         // Render
-        EventBus.subscribe(ClientRenderEvent.class, evt -> onClientRenderOverlay(evt.stack));
+        EventBus.subscribe(ClientRenderEvent.class, evt -> onClientRenderOverlay(evt.graphics));
 
         // Playground
         Playground.IDLE_TEST_INIT_FUNCTION(this);
@@ -188,7 +188,7 @@ public class AltoClef implements ModInitializer {
         _inputControls.onTickPre();
 
         // Cancel shortcut
-        if (InputHelper.isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL) && InputHelper.isKeyPressed(GLFW.GLFW_KEY_K)) {
+        if (InputHelper.isKeyPressed(InputConstants.KEY_LCONTROL) && InputHelper.isKeyPressed(InputConstants.KEY_K)) {
             _userTaskChain.cancel(this);
             if (_taskRunner.getCurrentTaskChain() != null) {
                 _taskRunner.getCurrentTaskChain().stop(this);
@@ -213,8 +213,8 @@ public class AltoClef implements ModInitializer {
 
     /// GETTERS AND SETTERS
 
-    private void onClientRenderOverlay(MatrixStack matrixStack) {
-        _commandStatusOverlay.render(this, matrixStack);
+    private void onClientRenderOverlay(net.minecraft.client.gui.GuiGraphicsExtractor graphics) {
+        _commandStatusOverlay.render(this, graphics);
     }
 
     private void initializeBaritoneSettings() {
@@ -329,18 +329,18 @@ public class AltoClef implements ModInitializer {
     /**
      * Baritone access (could just be static honestly)
      */
-    public Baritone getClientBaritone() {
+    public IBaritone getClientBaritone() {
         if (getPlayer() == null) {
-            return (Baritone) BaritoneAPI.getProvider().getPrimaryBaritone();
+            return BaritoneAPI.getProvider().getPrimaryBaritone();
         }
-        return (Baritone) BaritoneAPI.getProvider().getBaritoneForPlayer(getPlayer());
+        return BaritoneAPI.getProvider().getBaritoneForPlayer(getPlayer());
     }
 
     /**
      * Baritone settings access (could just be static honestly)
      */
     public Settings getClientBaritoneSettings() {
-        return Baritone.settings();
+        return BaritoneAPI.getSettings();
     }
 
     /**
@@ -381,22 +381,22 @@ public class AltoClef implements ModInitializer {
     /**
      * Minecraft player client access (could just be static honestly)
      */
-    public ClientPlayerEntity getPlayer() {
-        return MinecraftClient.getInstance().player;
+    public LocalPlayer getPlayer() {
+        return Minecraft.getInstance().player;
     }
 
     /**
      * Minecraft world access (could just be static honestly)
      */
-    public ClientWorld getWorld() {
-        return MinecraftClient.getInstance().world;
+    public ClientLevel getWorld() {
+        return Minecraft.getInstance().level;
     }
 
     /**
      * Minecraft client interaction controller access (could just be static honestly)
      */
-    public ClientPlayerInteractionManager getController() {
-        return MinecraftClient.getInstance().interactionManager;
+    public MultiPlayerGameMode getController() {
+        return Minecraft.getInstance().gameMode;
     }
 
     /**

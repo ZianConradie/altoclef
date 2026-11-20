@@ -7,16 +7,16 @@ import adris.altoclef.tasksystem.TaskChain;
 import adris.altoclef.tasksystem.TaskRunner;
 import adris.altoclef.util.time.TimerGame;
 import adris.altoclef.util.time.TimerReal;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.DeathScreen;
-import net.minecraft.client.gui.screen.DisconnectedScreen;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.screen.TitleScreen;
-import net.minecraft.client.gui.screen.multiplayer.ConnectScreen;
-import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
-import net.minecraft.client.network.ServerAddress;
-import net.minecraft.client.network.ServerInfo;
-import net.minecraft.text.Text;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.DeathScreen;
+import net.minecraft.client.gui.screens.DisconnectedScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.network.chat.Component;
 
 public class DeathMenuChain extends TaskChain {
 
@@ -24,14 +24,14 @@ public class DeathMenuChain extends TaskChain {
     private final TimerReal _deathRetryTimer = new TimerReal(8);
     private final TimerGame _reconnectTimer = new TimerGame(1);
     private final TimerGame _waitOnDeathScreenBeforeRespawnTimer = new TimerGame(2);
-    private ServerInfo _prevServerEntry = null;
+    private ServerData _prevServerEntry = null;
     private boolean _reconnecting = false;
     private int _deathCount = 0;
     private Class _prevScreen = null;
 
 
-    public DeathMenuChain(TaskRunner runner) {
-        super(runner);
+    public DeathMenuChain(TaskRunner task) {
+        super(task);
     }
 
     private boolean shouldAutoRespawn(AltoClef mod) {
@@ -61,7 +61,7 @@ public class DeathMenuChain extends TaskChain {
     public float getPriority(AltoClef mod) {
         //MinecraftClient.getInstance().getCurrentServerEntry().address;
 //        MinecraftClient.getInstance().
-        Screen screen = MinecraftClient.getInstance().currentScreen;
+        Screen screen = Minecraft.getInstance().gui.screen();
         // This might fix Weird fail to respawn that happened only once
         if (_prevScreen == DeathScreen.class) {
             if (_deathRetryTimer.elapsed()) {
@@ -74,7 +74,7 @@ public class DeathMenuChain extends TaskChain {
         }
         // Keep track of the last server we were on so we can re-connect.
         if (AltoClef.inGame()) {
-            _prevServerEntry = MinecraftClient.getInstance().getCurrentServerEntry();
+            _prevServerEntry = Minecraft.getInstance().getCurrentServer();
         }
 
         if (screen instanceof DeathScreen) {
@@ -83,23 +83,23 @@ public class DeathMenuChain extends TaskChain {
                 if (shouldAutoRespawn(mod)) {
                     _deathCount++;
                     Debug.logMessage("RESPAWNING... (this is death #" + _deathCount + ")");
-                    assert MinecraftClient.getInstance().player != null;
-                    Text screenMessage = ((DeathScreenAccessor) screen).getMessage();
+                    assert Minecraft.getInstance().player != null;
+                    Component screenMessage = ((DeathScreenAccessor) screen).getMessage();
                     String deathMessage = screenMessage != null ? screenMessage.getString() : "Unknown"; //"(not implemented yet)"; //screen.children().toString();
-                    MinecraftClient.getInstance().player.requestRespawn();
-                    MinecraftClient.getInstance().setScreen(null);
+                    Minecraft.getInstance().player.respawn();
+                    Minecraft.getInstance().setScreenAndShow(null);
                     for (String i : mod.getModSettings().getDeathCommand().split(" & ")) {
                         String command = i.replace("{deathmessage}", deathMessage);
                         String prefix = mod.getModSettings().getCommandPrefix();
-                        while (MinecraftClient.getInstance().player.isAlive()) ;
+                        while (Minecraft.getInstance().player.isAlive()) ;
                         if (!command.isEmpty()) {
                             if (command.startsWith(prefix)) {
                                 AltoClef.getCommandExecutor().execute(command, () -> {
                                 }, Throwable::printStackTrace);
                             } else if (command.startsWith("/")) {
-                                MinecraftClient.getInstance().player.networkHandler.sendChatCommand(command.substring(1));
+                                Minecraft.getInstance().player.connection.sendCommand(command.substring(1));
                             } else {
-                                MinecraftClient.getInstance().player.networkHandler.sendChatMessage(command);
+                                Minecraft.getInstance().player.connection.sendChat(command);
                             }
                         }
                     }
@@ -116,12 +116,12 @@ public class DeathMenuChain extends TaskChain {
                 if (shouldAutoReconnect(mod)) {
                     Debug.logMessage("RECONNECTING: Going to Multiplayer Screen");
                     _reconnecting = true;
-                    MinecraftClient.getInstance().setScreen(new MultiplayerScreen(new TitleScreen()));
+                    Minecraft.getInstance().setScreenAndShow(new JoinMultiplayerScreen(new TitleScreen()));
                 } else {
                     // Cancel if we disconnect and are not auto-reconnecting.
                     mod.cancelUserTask();
                 }
-            } else if (screen instanceof MultiplayerScreen && _reconnecting && _reconnectTimer.elapsed()) {
+            } else if (screen instanceof JoinMultiplayerScreen && _reconnecting && _reconnectTimer.elapsed()) {
                 _reconnectTimer.reset();
                 Debug.logMessage("RECONNECTING: Going ");
                 _reconnecting = false;
@@ -129,9 +129,9 @@ public class DeathMenuChain extends TaskChain {
                 if (_prevServerEntry == null) {
                     Debug.logWarning("Failed to re-connect to server, no server entry cached.");
                 } else {
-                    MinecraftClient client = MinecraftClient.getInstance();
-                    ConnectScreen.connect(screen, client, ServerAddress.parse(_prevServerEntry.address), _prevServerEntry, false, null);
-                    //ConnectScreen.connect(screen, client, ServerAddress.parse(_prevServerEntry.address), _prevServerEntry);
+                    Minecraft client = Minecraft.getInstance();
+                    ConnectScreen.startConnecting(screen, client, ServerAddress.parseString(_prevServerEntry.ip), _prevServerEntry, false, null);
+                    //ConnectScreen.startConnecting(screen, client, ServerAddress.parseString(_prevServerEntry.address), _prevServerEntry);
                     //client.setScreen(new ConnectScreen(screen, client, _prevServerEntry));
                 }
             }

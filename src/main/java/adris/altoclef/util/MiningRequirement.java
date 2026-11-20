@@ -1,12 +1,12 @@
 package adris.altoclef.util;
 
 import adris.altoclef.Debug;
-import net.minecraft.block.Block;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public enum MiningRequirement implements Comparable<MiningRequirement> {
-    HAND(Items.AIR.getDefaultStack()), WOOD(Items.WOODEN_PICKAXE.getDefaultStack()), STONE(Items.STONE_PICKAXE.getDefaultStack()), IRON(Items.IRON_PICKAXE.getDefaultStack()), DIAMOND(Items.DIAMOND_PICKAXE.getDefaultStack()), NETHERITE(Items.NETHERITE_PICKAXE.getDefaultStack());
+    HAND(Items.AIR.getDefaultInstance()), WOOD(Items.WOODEN_PICKAXE.getDefaultInstance()), STONE(Items.STONE_PICKAXE.getDefaultInstance()), IRON(Items.IRON_PICKAXE.getDefaultInstance()), DIAMOND(Items.DIAMOND_PICKAXE.getDefaultInstance()), NETHERITE(Items.NETHERITE_PICKAXE.getDefaultInstance());
 
     private final ItemStack _minPickaxe;
 
@@ -15,11 +15,11 @@ public enum MiningRequirement implements Comparable<MiningRequirement> {
     }
 
     public static MiningRequirement getMinimumRequirementForBlock(Block block) {
-        if (block.getDefaultState().isToolRequired()) {
+        if (block.defaultBlockState().requiresCorrectToolForDrops()) {
             for (MiningRequirement req : MiningRequirement.values()) {
                 if (req == MiningRequirement.HAND) continue;
                 ItemStack pick = req.getMinimumPickaxe();
-                if (pick.isSuitableFor(block.getDefaultState())) {
+                if (pick.isCorrectToolForDrops(block.defaultBlockState())) {
                     return req;
                 }
             }

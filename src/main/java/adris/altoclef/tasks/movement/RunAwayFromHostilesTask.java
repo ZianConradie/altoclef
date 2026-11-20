@@ -4,8 +4,8 @@ import adris.altoclef.AltoClef;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.baritone.GoalRunAwayFromEntities;
 import baritone.api.pathing.goals.Goal;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.mob.SkeletonEntity;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.skeleton.Skeleton;
 
 import java.util.List;
 import java.util.Optional;
@@ -58,7 +58,7 @@ public class RunAwayFromHostilesTask extends CustomBaritoneGoalTask {
                 for (Entity hostile : hostiles) {
                     Optional<Entity> closestHostile = mod.getEntityTracker().getClosestEntity(hostile.getClass());
                     if (closestHostile.isPresent()) {
-                        if (!_includeSkeletons && closestHostile.get() instanceof SkeletonEntity) {
+                        if (!_includeSkeletons && closestHostile.get() instanceof Skeleton) {
                             return Optional.empty();
                         }
                         return closestHostile;

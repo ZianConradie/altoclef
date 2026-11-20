@@ -13,13 +13,13 @@ import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.slots.Slot;
 import adris.altoclef.util.time.TimerGame;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.FallingBlock;
-import net.minecraft.block.LeavesBlock;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.Item;
-import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.core.BlockPos;
 
 import java.util.Arrays;
 import java.util.List;
@@ -42,8 +42,8 @@ public class CoverWithBlocksTask extends Task {
     @Override
     protected Task onTick(AltoClef mod) {
         Item[] throwAways = mod.getModSettings().getThrowawayItems(mod, true);
-        Item[] throwAwaysToUse = Arrays.stream(throwAways).filter(item -> !(Block.getBlockFromItem(item) instanceof LeavesBlock) &&
-                !(Block.getBlockFromItem(item) instanceof FallingBlock) && item instanceof BlockItem).toArray(Item[]::new);
+        Item[] throwAwaysToUse = Arrays.stream(throwAways).filter(item -> !(Block.byItem(item) instanceof LeavesBlock) &&
+                !(Block.byItem(item) instanceof FallingBlock) && item instanceof BlockItem).toArray(Item[]::new);
         int throwAwayCount = mod.getItemStorage().getItemCount(throwAwaysToUse);
         if (getBlocks != null && throwAwayCount < 128) {
             setDebugState("Getting blocks to cover nether lava.");
@@ -86,16 +86,16 @@ public class CoverWithBlocksTask extends Task {
 
     private Task coverLavaWithSand(AltoClef mod) {
         Predicate<BlockPos> validLava = blockPos ->
-                mod.getWorld().getBlockState(blockPos).getFluidState().isStill() &&
-                        WorldHelper.isAir(mod, blockPos.up()) &&
+                mod.getWorld().getBlockState(blockPos).getFluidState().isSource() &&
+                        WorldHelper.isAir(mod, blockPos.above()) &&
                         (!WorldHelper.isBlock(mod, blockPos.north(), Blocks.LAVA) ||
                                 !WorldHelper.isBlock(mod, blockPos.south(), Blocks.LAVA) ||
                                 !WorldHelper.isBlock(mod, blockPos.east(), Blocks.LAVA) ||
                                 !WorldHelper.isBlock(mod, blockPos.west(), Blocks.LAVA) ||
-                                !WorldHelper.isBlock(mod, blockPos.north().up(), Blocks.LAVA) ||
-                                !WorldHelper.isBlock(mod, blockPos.south().up(), Blocks.LAVA) ||
-                                !WorldHelper.isBlock(mod, blockPos.east().up(), Blocks.LAVA) ||
-                                !WorldHelper.isBlock(mod, blockPos.west().up(), Blocks.LAVA));
+                                !WorldHelper.isBlock(mod, blockPos.north().above(), Blocks.LAVA) ||
+                                !WorldHelper.isBlock(mod, blockPos.south().above(), Blocks.LAVA) ||
+                                !WorldHelper.isBlock(mod, blockPos.east().above(), Blocks.LAVA) ||
+                                !WorldHelper.isBlock(mod, blockPos.west().above(), Blocks.LAVA));
         Optional<BlockPos> lava = mod.getBlockTracker().getNearestTracking(validLava, Blocks.LAVA);
         if (lava.isPresent()) {
             if (lavaPos == null) {
@@ -106,19 +106,19 @@ public class CoverWithBlocksTask extends Task {
                 lavaPos = lava.get();
                 timer.reset();
             }
-            if (!WorldHelper.isBlock(mod, lavaPos, Blocks.LAVA) || !WorldHelper.isAir(mod, lavaPos.up()) ||
-                    !mod.getWorld().getBlockState(lavaPos).getFluidState().isStill()) {
+            if (!WorldHelper.isBlock(mod, lavaPos, Blocks.LAVA) || !WorldHelper.isAir(mod, lavaPos.above()) ||
+                    !mod.getWorld().getBlockState(lavaPos).getFluidState().isSource()) {
                 lavaPos = lava.get();
                 timer.reset();
             }
             Item[] throwAways = mod.getModSettings().getThrowawayItems(mod, true);
-            Item[] throwAwaysToUse = Arrays.stream(throwAways).filter(item -> !(Block.getBlockFromItem(item) instanceof LeavesBlock) &&
-                    !(Block.getBlockFromItem(item) instanceof FallingBlock) && item instanceof BlockItem).toArray(Item[]::new);
+            Item[] throwAwaysToUse = Arrays.stream(throwAways).filter(item -> !(Block.byItem(item) instanceof LeavesBlock) &&
+                    !(Block.byItem(item) instanceof FallingBlock) && item instanceof BlockItem).toArray(Item[]::new);
             List<Slot> presentThrowAways = mod.getItemStorage().getSlotsWithItemPlayerInventory(true, throwAwaysToUse);
             if (!presentThrowAways.isEmpty()) {
                 for (Slot presentThrowAway : presentThrowAways) {
                     Item throwAwayItem = StorageHelper.getItemStackInSlot(presentThrowAway).getItem();
-                    Block throwAwayBlock = Block.getBlockFromItem(throwAwayItem);
+                    Block throwAwayBlock = Block.byItem(throwAwayItem);
                     return new PlaceBlockTask(lavaPos, throwAwayBlock);
                 }
             }

@@ -1,8 +1,8 @@
 package adris.altoclef.util.baritone;
 
 import baritone.api.schematic.AbstractSchematic;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.List;
 
@@ -70,7 +70,7 @@ public class PlaceBlockSchematic extends AbstractSchematic {
                  */
                     continue;
                 }
-                //System.out.print(possible.getBlock().getTranslationKey() + " ");
+                //System.out.print(possible.getBlock().getDescriptionId() + " ");
                 if (blockIsTarget(possible.getBlock())) {
                     //System.out.print("PlaceBlockNearbySchematic  ( FOUND! )");
                     _targetPlace = possible;

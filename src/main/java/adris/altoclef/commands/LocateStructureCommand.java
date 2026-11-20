@@ -21,14 +21,14 @@ public class LocateStructureCommand extends Command {
             case STRONGHOLD:
                 mod.runUserTask(new GoToStrongholdPortalTask(1), this::finish);
                 break;
-            case DESERT_TEMPLE:
+            case DESERT_PYRAMID_PIECE:
                 mod.runUserTask(new LocateDesertTempleTask(), this::finish);
                 break;
         }
     }
 
     public enum Structure {
-        DESERT_TEMPLE,
+        DESERT_PYRAMID_PIECE,
         STRONGHOLD
     }
 }

@@ -25,22 +25,22 @@ import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.time.TimerGame;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.EndPortalFrameBlock;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.CreditsScreen;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.mob.EndermanEntity;
-import net.minecraft.entity.mob.SilverfishEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.tag.EnchantmentTags;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.Vec3i;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.EndPortalFrameBlock;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.WinScreen;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Enderman;
+import net.minecraft.world.entity.monster.Silverfish;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.core.Vec3i;
 import org.apache.commons.lang3.ArrayUtils;
 
 import java.util.*;
@@ -83,8 +83,10 @@ public class BeatMinecraft2Task extends Task {
     private static final double END_PORTAL_BED_SPAWN_RANGE = 8;
     // We don't want curse of binding
     private static final Predicate<ItemStack> _noCurseOfBinding = stack -> {
-        if (stack.getEnchantments().getEnchantments().contains(EnchantmentTags.CURSE)) {
-            return false;
+        for (net.minecraft.core.Holder<net.minecraft.world.item.enchantment.Enchantment> h : stack.getEnchantments().keySet()) {
+            if (h.is(EnchantmentTags.CURSE)) {
+                return false;
+            }
         }
         return true;
     };
@@ -144,7 +146,7 @@ public class BeatMinecraft2Task extends Task {
                 new Vec3i(0, 0, -2),
                 new Vec3i(-1, 0, -2)
         };
-        return Arrays.stream(frameOffsets).map(endPortalCenter::add).toList();
+        return Arrays.stream(frameOffsets).map(endPortalCenter::offset).toList();
     }
 
     private static boolean isEndPortalFrameFilled(AltoClef mod, BlockPos pos) {
@@ -155,7 +157,7 @@ public class BeatMinecraft2Task extends Task {
             Debug.logWarning("BLOCK POS " + pos + " DOES NOT CONTAIN END PORTAL FRAME! This is probably due to a bug/incorrect assumption.");
             return false;
         }
-        return state.get(EndPortalFrameBlock.EYE);
+        return state.getValue(EndPortalFrameBlock.HAS_EYE);
     }
 
     // Just a helpful utility to reduce reuse recycle.
@@ -283,7 +285,7 @@ public class BeatMinecraft2Task extends Task {
                 setDebugState("WOOHOO");
                 _enterindEndPortal = true;
                 return new DoToClosestBlockTask(
-                        blockPos -> new GetToBlockTask(blockPos.up()),
+                        blockPos -> new GetToBlockTask(blockPos.above()),
                         Blocks.END_PORTAL
                 );
             }
@@ -373,7 +375,7 @@ public class BeatMinecraft2Task extends Task {
                     // Destroy silverfish spawner
                     if (StorageHelper.miningRequirementMetInventory(mod, MiningRequirement.WOOD)) {
                         Optional<BlockPos> silverfish = mod.getBlockTracker().getNearestTracking(blockPos -> {
-                            return WorldHelper.getSpawnerEntity(mod, blockPos) instanceof SilverfishEntity;
+                            return WorldHelper.getSpawnerEntity(mod, blockPos) instanceof Silverfish;
                         }, Blocks.SPAWNER);
                         if (silverfish.isPresent()) {
                             return new DestroyBlockTask(silverfish.get());
@@ -412,7 +414,7 @@ public class BeatMinecraft2Task extends Task {
                         setDebugState("Entering End");
                         _enterindEndPortal = true;
                         return new DoToClosestBlockTask(
-                                blockPos -> new GetToBlockTask(blockPos.up()),
+                                blockPos -> new GetToBlockTask(blockPos.above()),
                                 Blocks.END_PORTAL
                         );
                     } else {
@@ -466,8 +468,8 @@ public class BeatMinecraft2Task extends Task {
         }
         _cachedEndItemDrops.clear();
         for (ItemEntity entity : droppedItems) {
-            Item item = entity.getStack().getItem();
-            int count = entity.getStack().getCount();
+            Item item = entity.getItem().getItem();
+            int count = entity.getItem().getCount();
             _cachedEndItemDrops.put(item, _cachedEndItemDrops.getOrDefault(item, 0) + count);
         }
     }
@@ -569,10 +571,10 @@ public class BeatMinecraft2Task extends Task {
     }
 
     private boolean canBeLootablePortalChest(AltoClef mod, BlockPos blockPos) {
-        if (mod.getWorld().getBlockState(blockPos.up(1)).getBlock() == Blocks.WATER || blockPos.getY() < 50) {
+        if (mod.getWorld().getBlockState(blockPos.above(1)).getBlock() == Blocks.WATER || blockPos.getY() < 50) {
             return false;
         }
-        for (BlockPos check : WorldHelper.scanRegion(mod, blockPos.add(-4, -2, -4), blockPos.add(4, 2, 4))) {
+        for (BlockPos check : WorldHelper.scanRegion(mod, blockPos.offset(-4, -2, -4), blockPos.offset(4, 2, 4))) {
             if (mod.getWorld().getBlockState(check).getBlock() == Blocks.NETHERRACK) {
                 return true;
             }
@@ -585,7 +587,7 @@ public class BeatMinecraft2Task extends Task {
         if (WorldHelper.getCurrentDimension() != Dimension.OVERWORLD) {
             return Optional.empty();
         }
-        return mod.getBlockTracker().getNearestTracking(blockPos -> !_notRuinedPortalChests.contains(blockPos) && WorldHelper.isUnopenedChest(mod, blockPos) && mod.getPlayer().getBlockPos().isWithinDistance(blockPos, 150) && canBeLootablePortalChest(mod, blockPos), Blocks.CHEST);
+        return mod.getBlockTracker().getNearestTracking(blockPos -> !_notRuinedPortalChests.contains(blockPos) && WorldHelper.isUnopenedChest(mod, blockPos) && mod.getPlayer().blockPosition().closerThan(blockPos, 150) && canBeLootablePortalChest(mod, blockPos), Blocks.CHEST);
     }
 
     private Task getEyesOfEnderTask(AltoClef mod, int targetEyes) {
@@ -656,13 +658,13 @@ public class BeatMinecraft2Task extends Task {
                 }
                 // Smelt remaining raw food
                 if (_config.alwaysCookRawFood) {
-                    for (Item raw : ItemHelper.RAW_FOODS) {
-                        if (mod.getItemStorage().hasItem(raw)) {
-                            Optional<Item> cooked = ItemHelper.getCookedFood(raw);
+                    for (Item pattern : ItemHelper.RAW_FOODS) {
+                        if (mod.getItemStorage().hasItem(pattern)) {
+                            Optional<Item> cooked = ItemHelper.getCookedFood(pattern);
                             if (cooked.isPresent()) {
-                                int targetCount = mod.getItemStorage().getItemCount(cooked.get()) + mod.getItemStorage().getItemCount(raw);
-                                setDebugState("Smelting raw food: " + ItemHelper.stripItemName(raw));
-                                return new SmeltInFurnaceTask(new SmeltTarget(new ItemTarget(cooked.get(), targetCount), new ItemTarget(raw, targetCount)));
+                                int targetCount = mod.getItemStorage().getItemCount(cooked.get()) + mod.getItemStorage().getItemCount(pattern);
+                                setDebugState("Smelting raw food: " + ItemHelper.stripItemName(pattern));
+                                return new SmeltInFurnaceTask(new SmeltTarget(new ItemTarget(cooked.get(), targetCount), new ItemTarget(pattern, targetCount)));
                             }
                         }
                     }
@@ -745,8 +747,8 @@ public class BeatMinecraft2Task extends Task {
             int goldBuffer = 32;
             return new TradeWithPiglinsTask(32, Items.ENDER_PEARL, count);
         } else {
-            if (mod.getEntityTracker().entityFound(EndermanEntity.class) || mod.getEntityTracker().itemDropped(Items.ENDER_PEARL)) {
-                return new KillAndLootTask(EndermanEntity.class, new ItemTarget(Items.ENDER_PEARL, count));
+            if (mod.getEntityTracker().entityFound(Enderman.class) || mod.getEntityTracker().itemDropped(Items.ENDER_PEARL)) {
+                return new KillAndLootTask(Enderman.class, new ItemTarget(Items.ENDER_PEARL, count));
             }
             // Search for warped forests this way...
             return new SearchChunkForBlockTask(Blocks.WARPED_NYLIUM);
@@ -793,9 +795,9 @@ public class BeatMinecraft2Task extends Task {
         List<BlockPos> frames = mod.getBlockTracker().getKnownLocations(Blocks.END_PORTAL_FRAME);
         if (frames.size() >= END_PORTAL_FRAME_COUNT) {
             // Get the center of the frames.
-            Vec3d average = frames.stream()
-                    .reduce(Vec3d.ZERO, (accum, bpos) -> accum.add(bpos.getX() + 0.5, bpos.getY() + 0.5, bpos.getZ() + 0.5), Vec3d::add)
-                    .multiply(1.0f / frames.size());
+            Vec3 average = frames.stream()
+                    .reduce(Vec3.ZERO, (accum, bpos) -> accum.add(bpos.getX() + 0.5, bpos.getY() + 0.5, bpos.getZ() + 0.5), Vec3::add)
+                    .scale(1.0f / frames.size());
             return new BlockPos((int) average.x, (int) average.y, (int) average.z);
         }
         return null;
@@ -803,6 +805,6 @@ public class BeatMinecraft2Task extends Task {
 
     @Override
     public boolean isFinished(AltoClef mod) {
-        return MinecraftClient.getInstance().currentScreen instanceof CreditsScreen;
+        return Minecraft.getInstance().gui.screen() instanceof WinScreen;
     }
 }

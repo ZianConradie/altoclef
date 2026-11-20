@@ -1,14 +1,14 @@
 package adris.altoclef.eventbus.events;
 
-import net.minecraft.client.render.RenderTickCounter;
-import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 public class ClientRenderEvent {
-    public MatrixStack stack;
-    public RenderTickCounter tickDelta;
+    public GuiGraphicsExtractor graphics;
+    public DeltaTracker tickDelta;
 
-    public ClientRenderEvent(MatrixStack stack, RenderTickCounter tickDelta) {
-        this.stack = stack;
+    public ClientRenderEvent(GuiGraphicsExtractor graphics, DeltaTracker tickDelta) {
+        this.graphics = graphics;
         this.tickDelta = tickDelta;
     }
 }

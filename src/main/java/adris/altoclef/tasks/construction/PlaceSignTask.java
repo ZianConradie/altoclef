@@ -9,17 +9,19 @@ import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.slots.Slot;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.ingame.SignEditScreen;
-import net.minecraft.item.ItemStack;
-import net.minecraft.screen.slot.SlotActionType;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Direction;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.SignEditScreen;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 import java.util.Optional;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.CharacterEvent;
 
 public class PlaceSignTask extends Task {
 
@@ -66,19 +68,19 @@ public class PlaceSignTask extends Task {
             return new PlaceBlockNearbyTask(ItemHelper.WOOD_SIGNS_ALL);
         } else {
 
-            assert MinecraftClient.getInstance().world != null;
-            BlockState b = MinecraftClient.getInstance().world.getBlockState(_target);
+            assert Minecraft.getInstance().level != null;
+            BlockState b = Minecraft.getInstance().level.getBlockState(_target);
 
             if (!isSign(b.getBlock()) && !b.isAir() && b.getBlock() != Blocks.WATER && b.getBlock() != Blocks.LAVA) {
                 return new DestroyBlockTask(_target);
             }
 
-            return new InteractWithBlockTask(new ItemTarget("sign", 1), Direction.UP, _target.down(), true);
+            return new InteractWithBlockTask(new ItemTarget("sign", 1), Direction.UP, _target.below(), true);
         }
     }
 
     private Task editSign(AltoClef mod) {
-        SignEditScreen screen = (SignEditScreen) MinecraftClient.getInstance().currentScreen;
+        SignEditScreen screen = (SignEditScreen) Minecraft.getInstance().gui.screen();
         assert screen != null;
 
         StringBuilder currentLine = new StringBuilder();
@@ -90,7 +92,7 @@ public class PlaceSignTask extends Task {
         for (char c : _message.toCharArray()) {
             currentLine.append(c);
 
-            if (c == '\n' || MinecraftClient.getInstance().textRenderer.getWidth(currentLine.toString()) > SIGN_TEXT_MAX_WIDTH) {
+            if (c == '\n' || Minecraft.getInstance().font.width(currentLine.toString()) > SIGN_TEXT_MAX_WIDTH) {
                 currentLine.delete(0, currentLine.length());
                 if (c != '\n') {
                     currentLine.append(c);
@@ -102,15 +104,15 @@ public class PlaceSignTask extends Task {
                 }
 
                 // Add newline
-                screen.keyPressed(257, 36, 0);
+                screen.keyPressed(new KeyEvent(257, 36, 0));
                 //Debug.logMessage("NEW LINE ADDED BEFORE: " + c);
             }
             // keycode don't matter
             //int keyCode = java.awt.event.KeyEvent.getExtendedKeyCodeForChar(c);
-            screen.charTyped(c, -1);
+            screen.charTyped(new CharacterEvent(c));
             //screen.keyPressed(keyCode, -1, )
         }
-        screen.close();
+        screen.onClose();
         _finished = true;
 
         return null;
@@ -121,14 +123,14 @@ public class PlaceSignTask extends Task {
         ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
         if (!cursorStack.isEmpty()) {
             Optional<Slot> moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
-            moveTo.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
+            moveTo.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, ContainerInput.PICKUP));
             if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
             }
             Optional<Slot> garbage = StorageHelper.getGarbageSlot(mod);
             // Try throwing away cursor slot if it's garbage
-            garbage.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
-            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+            garbage.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, ContainerInput.PICKUP));
+            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, ContainerInput.PICKUP);
         } else {
             StorageHelper.closeScreen();
         }
@@ -165,6 +167,6 @@ public class PlaceSignTask extends Task {
     }
 
     private boolean editingSign() {
-        return MinecraftClient.getInstance().currentScreen instanceof SignEditScreen;
+        return Minecraft.getInstance().gui.screen() instanceof SignEditScreen;
     }
 }
