@@ -2,8 +2,11 @@ package adris.altoclef.tasks.movement;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.tasksystem.Task;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import org.apache.commons.lang3.ArrayUtils;
 
 import java.util.Arrays;
@@ -19,10 +22,17 @@ public class SearchChunkForBlockTask extends SearchChunksExploreTask {
 
     @Override
     protected boolean isChunkWithinSearchSpace(AltoClef mod, ChunkPos pos) {
-        return mod.getChunkTracker().scanChunk(pos, block -> {
-                    return _toSearchFor.contains(mod.getWorld().getBlockState(block).getBlock());
-                }
-        );
+        ClientLevel world = mod.getWorld();
+        if (world == null) return false;
+        LevelChunk chunk = world.getChunk(pos.x(), pos.z());
+        // Ask each section's palette whether it *could* hold one of our blocks. This is a
+        // handful of palette lookups instead of walking every block in the chunk (which was
+        // ~100k block state reads per chunk, every time a chunk was considered).
+        for (LevelChunkSection section : chunk.getSections()) {
+            if (section == null || section.hasOnlyAir()) continue;
+            if (section.maybeHas(state -> _toSearchFor.contains(state.getBlock()))) return true;
+        }
+        return false;
     }
 
     @Override

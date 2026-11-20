@@ -63,7 +63,7 @@ public class BlockTracker extends Tracker {
     private final Semaphore _endOfFrameMutex = new Semaphore(1);
     //private Block _currentlyTracking = null;
     private final AltoClef _mod;
-    private boolean _scanning = false;
+    private volatile boolean _scanning = false;
 
     public BlockTracker(AltoClef mod, TrackerManager manager) {
         super(manager);
@@ -295,21 +295,37 @@ public class BlockTracker extends Tracker {
         return _timer.elapsed();
     }
 
+    private boolean hasTrackedBlocks() {
+        synchronized (_trackingBlocks) {
+            return !_trackingBlocks.isEmpty();
+        }
+    }
+
     private void update() {
         // Perform a baritone scan
         _timer.reset();
         _timer.setInterval(_config.scanInterval);
+        // Nothing is being tracked, so a scan would find nothing we care about and
+        // only burn CPU (this used to scan the whole loaded area every few seconds for nothing).
+        if (!hasTrackedBlocks()) {
+            return;
+        }
         if (_config.scanAsynchronously) {
             if (_scanning && _asyncForceResetScanFlag.elapsed()) {
                 Debug.logMessage("SCANNING TOOK TOO LONG! Will assume it ended mid way. Hopefully this won't break anything...");
                 _scanning = false;
             }
             if (!_scanning) {
+                // Mark as scanning before submitting, otherwise every tick between the submit
+                // and the worker actually starting queues up another full world scan.
+                _scanning = true;
                 java.util.concurrent.ForkJoinPool.commonPool().execute(() -> {
-                    _scanning = true;
                     _asyncForceResetScanFlag.reset();
-                    rescanWorld(true);
-                    _scanning = false;
+                    try {
+                        rescanWorld(true);
+                    } finally {
+                        _scanning = false;
+                    }
                 });
             }
         } else {
@@ -401,12 +417,18 @@ public class BlockTracker extends Tracker {
             return true;
         }
         try {
-            for (Block block : blocks) {
-                if (zaWarudo.getBlockState(pos).isAir() && WorldHelper.isAir(block)) {
-                    return true;
+            BlockState state = zaWarudo.getBlockState(pos);
+            // Look the state up once, not once per tracked block type.
+            if (state.isAir()) {
+                for (Block block : blocks) {
+                    if (WorldHelper.isAir(block)) {
+                        return true;
+                    }
                 }
-                BlockState state = zaWarudo.getBlockState(pos);
-                if (state.getBlock() == block) {
+            }
+            Block actual = state.getBlock();
+            for (Block block : blocks) {
+                if (actual == block) {
                     return true;
                 }
             }

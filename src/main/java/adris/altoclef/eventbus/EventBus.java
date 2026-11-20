@@ -23,34 +23,43 @@ public class EventBus {
         Class type = event.getClass();
 
         // Add all subscriptions we need to add
-        for (Pair<Class, Subscription> toAdd : _toAdd) {
-            subscribeInternal(toAdd.getLeft(), toAdd.getRight());
+        if (!_toAdd.isEmpty()) {
+            for (Pair<Class, Subscription> toAdd : _toAdd) {
+                subscribeInternal(toAdd.getLeft(), toAdd.getRight());
+            }
+            _toAdd.clear();
         }
-        _toAdd.clear();
 
-        if (_topics.containsKey(type)) {
-            List<Subscription> subscribers = _topics.get(type);
+        List<Subscription> subscribers = _topics.get(type);
+        if (subscribers == null) {
+            return;
+        }
 
-            // Subscriptions can be deleted while they're called
-            List<Subscription> toDelete = new ArrayList<>();
+        _lock = true;
+        try {
+            // Drop everything that was unsubscribed since the last publish.
+            // Without this the lists only ever grow, which leaks every task that
+            // subscribes/unsubscribes (and makes every publish slower over time).
+            subscribers.removeIf(Subscription::shouldDelete);
+            if (subscribers.isEmpty()) {
+                _topics.remove(type);
+                return;
+            }
 
             // Go through our subscription list. We shouldn't modify the list while we're iterating it.
-            _lock = true;
             for (Subscription subRaw : subscribers) {
-                Subscription<T> sub;
+                // A subscriber may unsubscribe itself/others mid-publish; cleaned up next time.
+                if (subRaw.shouldDelete()) {
+                    continue;
+                }
                 try {
-                    sub = (Subscription<T>) subRaw;
-                    if (sub.shouldDelete()) {
-                        toDelete.add(sub);
-                    } else {
-                        sub.accept(event);
-                    }
+                    ((Subscription<T>) subRaw).accept(event);
                 } catch (ClassCastException e) {
                     System.err.println("TRIED PUBLISHING MISMAPPED EVENT: " + event);
                     e.printStackTrace();
                 }
             }
-            // Delete all subscriptions
+        } finally {
             _lock = false;
         }
     }
